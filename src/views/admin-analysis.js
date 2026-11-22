@@ -1,0 +1,19 @@
+// このファイルの関数・定数は main.js で window に登録され、
+// 画面の onclick と他のファイルから名前だけで呼べます（v2.3 の1ファイル版と同じ動き）。
+/* ===================== 管理者：人件費・労務 ===================== */
+export function tabAnalysis(){if(!can('cost'))return`<div class="card tight">${navBar()}</div>`+lockedCard('cost');
+ const D=dim(),st=stats(),tc=st.reduce((a,x)=>a+x.cost,0),bg=pbudget(),diff=tc-bg,over=diff>0,rate=bg?tc/bg*100:0,iss=laborIssues();
+ const dc=Array.from({length:D},(_,i)=>dayCost(i+1)),mx=Math.max(...dc,1),avg=k=>st.reduce((a,x)=>a+x[k],0)/(st.length||1),hl=(k,v)=>{const a=avg(k);return a&&Math.abs(v-a)/a>.25?'background:var(--bad-soft);color:var(--bad);font-weight:700':''};
+ const nightCost=st.reduce((a,x)=>a+x.night*.25*x.st.wage,0),mh=Math.max(...st.map(x=>x.h),1);
+ const col=d=>holSun(d)?'var(--sun-fg)':dow(d)===6?'var(--sat-fg)':'var(--accent)';
+ return`<div class="card tight"><div class="row between">${navBar()}<span class="small muted">${S.span==='m1'?'月間予算':'期間予算（月間予算を日割り）'}と比べます</span></div></div>
+ <div class="tiles"><div class="tile"><div class="k">予想人件費（深夜割増・有給を含む）</div><div class="v">${yen(tc)}</div></div>
+ <div class="tile"><div class="k">予算</div><div class="v">${yen(bg)}</div></div>
+ <div class="tile"><div class="k">予算消化率</div><div class="v" style="color:${over?'var(--bad)':'inherit'}">${rate.toFixed(1)}%</div><div class="bar" style="margin-top:6px"><i style="width:${Math.min(100,rate)}%;background:${over?'var(--bad)':'var(--accent)'}"></i></div></div>
+ <div class="tile"><div class="k">予算との差</div><div class="v" style="font-size:20px;color:${over?'var(--bad)':'var(--ok)'}">${over?yen(diff)+' 超過':yen(-diff)+' 余裕'}</div><div class="xs muted">うち深夜割増 ${yen(nightCost)}</div></div></div>
+ <div class="card"><h2>労務チェック（${iss.length}件）</h2><p class="small muted" style="margin-bottom:8px">連勤上限 ${S.rules.maxRun}日・勤務間インターバル ${S.rules.interval}時間・週40時間・社会保険の週20時間・扶養ラインを確認します。基準は「設定」で変えられます。</p>${shahoInfo()}
+ <div class="list">${iss.length?iss.map(x=>`<div class="li" style="padding:8px 0"><div class="body row"><span class="chip ${x.lv}">${x.k}</span><b>${esc(x.st.name)}</b><span>${esc(x.t)}</span></div></div>`).join(''):'<div class="empty">この期間に問題は見つかりませんでした</div>'}</div>${noteH('扶養・社会保険は'+lawBasis())}</div>
+ <div class="card"><h2>日別人件費</h2><div style="overflow-x:auto"><div style="display:flex;align-items:flex-end;gap:3px;height:170px;min-width:${D*14}px">${dc.map((v,i)=>`<div title="${dlabel(i+1)}：${yen(v)}" style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center"><div style="width:100%;height:${Math.max(2,v/mx*88)}%;background:${col(i+1)};border-radius:4px 4px 0 0;opacity:.85"></div><div class="xs muted">${dom(i+1)}</div></div>`).join('')}</div></div></div>
+ <div class="card"><h2>スタッフ別・公平性チェック（平均から25%以上ずれると赤）</h2><div class="tw"><table class="t"><tr><th>スタッフ</th><th>労働時間</th><th class="num">うち深夜</th><th class="num">支給見込</th><th class="num">出勤</th><th class="num">土日休み</th><th class="num">有給</th><th>扶養ライン</th></tr>
+ ${st.map(x=>{const lim=+x.st.fuyo?x.st.fuyo/12:0;return`<tr><td><b>${esc(x.st.name)}</b></td><td style="${hl('h',x.h)};min-width:150px"><div class="bar" style="margin-bottom:2px"><i style="width:${x.h/mh*100}%"></i></div>${x.h.toFixed(1)}h</td><td class="num">${x.night.toFixed(1)}h</td><td class="num">${yen(x.cost)}</td><td class="num" style="${hl('days',x.days)}">${x.days}</td><td class="num" style="${hl('wend',x.wend)}">${x.wend}</td><td class="num">${x.pl}</td><td>${lim?`<span class="chip ${x.cost>lim?'bad':x.cost>lim*.9?'warn':'ok'}">${yen(lim)}/月</span>`:'<span class="xs muted">—</span>'}</td></tr>`}).join('')}
+ <tr><td class="bold">合計</td><td class="bold">${st.reduce((a,x)=>a+x.h,0).toFixed(1)}h</td><td class="num">${st.reduce((a,x)=>a+x.night,0).toFixed(1)}h</td><td class="num bold">${yen(tc)}</td><td colspan="4"></td></tr></table></div>${noteH('扶養ラインは'+lawBasis())}</div>`}

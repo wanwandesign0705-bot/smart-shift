@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# 接続先やパスワードは .env に書き、リポジトリには入れない
+.env
+.env.*
+!.env.example
+*.local
