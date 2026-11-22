@@ -7,6 +7,7 @@ import * as law from './config/law.js';
 import * as updates from './config/updates.js';
 import * as legal from './config/legal.js';
 import * as utils from './utils.js';
+import * as data from './data.js';
 import * as state from './state.js';
 import * as plan from './plan.js';
 import * as period from './period.js';
@@ -25,7 +26,7 @@ import * as staff from './views/staff.js';
 import * as infoPages from './views/info-pages.js';
 import * as shell from './views/shell.js';
 
-const modules = { constants, law, updates, legal, utils, state, plan, period, calc, exporter, reservations, grid,
+const modules = { constants, law, updates, legal, utils, data, state, plan, period, calc, exporter, reservations, grid,
   adminShift, adminRequests, adminLeave, adminAnalysis, adminNotices, adminSettings, adminPlan, staff, infoPages, shell };
 
 const seen = {};
@@ -40,7 +41,9 @@ for (const [file, mod] of Object.entries(modules)) {
 }
 
 /* ===================== 起動 ===================== */
-initState();
-if (!Object.keys(S.grid).length) { gen(); msg = ''; }
-render();
-if (returning && isNewUpd()) whatsNew();
+// 読み込みは Supabase に替えると待ち時間が出るので、今から「読み終わってから描く」形にしておく
+initState().then(() => {
+  if (!Object.keys(S.grid).length) { gen(); msg = ''; }
+  render();
+  if (returning && isNewUpd()) whatsNew();
+});

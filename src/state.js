@@ -16,22 +16,15 @@ export function migrate(o){const d=def();o={...d,...o};o.plan={...d.plan,...(o.p
  o.staff=(o.staff||[]).map((s,i)=>{const x={hire:HIRE[i%HIRE.length],wdays:5,plAdj:0,plHours:8,fuyo:0,fix:{},student:/学生/.test(s.role||''),longEmp:true,...s};if(FUYO_MAP[x.fuyo])x.fuyo=FUYO_MAP[x.fuyo];return x});
  ['wish','grid','memo'].forEach(k=>o[k]=o[k]||{});o.res=o.res||[];o.notices=o.notices||[];o.v=7;return o}
 
-/* 画面どうしで共有する変数（v2.3 では let で宣言していたもの）。window に置き、どのファイルからも名前で読み書きする */
-export function initState(){
- let S=LS.get('ssm7');
- if(!S){const old=LS.get('shiftApp6');S=old?migrate(old):def()}else S=migrate(S);
- Object.assign(window,{S,R:LS.get('ssm7_reqs')||[],DB:null,USER:null,mode:'local',isOwner:false,cfgReady:true,myUid:null,
-  me:LS.get('ssm_me'),adminOK:false,showLock:false,tab:LS.get('ssm_tab')||0,sv:0,av:'shift',sel:null,resDay:null,msg:'',cycle:S.plan.cycle||'m',
-  curStart:iso(new Date()),page:null,updSeen:LS.get('ssm_seen'),returning:!!LS.get('ssm7')||!!LS.get('shiftApp6')});
+/* 画面どうしで共有する変数（v2.3 では let で宣言していたもの）。window に置き、どのファイルからも名前で読み書きする。
+   読み込みはデータ層（data.js）を通す */
+export async function initState(){
+ let S=loadStore();
+ if(!S){const old=loadLegacyStore();S=old?migrate(old):def()}else S=migrate(S);
+ Object.assign(window,{S,R:await loadRequests(),DB:null,USER:null,mode:'local',isOwner:false,cfgReady:true,myUid:null,
+  me:getPref('me'),adminOK:false,showLock:false,tab:getPref('tab')||0,sv:0,av:'shift',sel:null,resDay:null,msg:'',cycle:S.plan.cycle||'m',
+  curStart:iso(new Date()),page:null,updSeen:getPref('seenVersion'),returning:hasSavedStore()});
  norm();
- if(!updSeen&&!returning)LS.set('ssm_seen',APP_VER);
+ if(!updSeen&&!returning)setPref('seenVersion',APP_VER);
 }
-export const isNewUpd=()=>LS.get('ssm_seen')!==APP_VER;
-
-/* ---- 保存（ローカル or 共有DB） ---- */
-export function save(){LS.set('ssm7',S)}
-export const REQ={
- async add(r){r.id='q'+Date.now()+Math.random().toString(36).slice(2,6);r.createdAt=new Date().toISOString();if(myUid)r.uid=myUid;
-  R.push(r);LS.set('ssm7_reqs',R);render();return true},
- async upd(id,p){const r=R.find(x=>x.id===id);if(r)Object.assign(r,p);LS.set('ssm7_reqs',R);render();return true},
- async del(id){R=R.filter(x=>x.id!==id);LS.set('ssm7_reqs',R);render()}};
+export const isNewUpd=()=>getPref('seenVersion')!==APP_VER;

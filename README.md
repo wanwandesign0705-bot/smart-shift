@@ -22,6 +22,7 @@ npm run build    # 公開用のファイルを dist/ に作る
 | `src/styles.css` | 見た目（v2.3 と同じ） |
 | `src/config/` | 業種テンプレート・料金プラン（constants）、労務の基準値（law）、アップデート情報（updates）、規約の本文（legal） |
 | `src/utils.js` `src/period.js` `src/plan.js` `src/calc.js` | 共通の小物、期間、プラン判定、シフト・人件費・労務・有給の計算 |
+| `src/data.js` | **データ層**。読み込み・保存はすべてここを通す（いまはブラウザ内。Supabase に替えるときはこのファイルだけを書き換える） |
 | `src/state.js` | 店舗データのひな形と、画面どうしで共有する変数 |
 | `src/export.js` | Excel 出力 |
 | `src/views/` | 画面ごとのファイル（管理者の7タブ、スタッフ画面、シフト表、予約、アップデート情報と規約、ロック画面と全体の描画） |

@@ -1,7 +1,7 @@
 // このファイルの関数・定数は main.js で window に登録され、
 // 画面の onclick と他のファイルから名前だけで呼べます（v2.3 の1ファイル版と同じ動き）。
 /* ===================== スタッフ画面 ===================== */
-export function setMe(v){me=v||null;LS.set('ssm_me',me);render(true)}
+export function setMe(v){me=v||null;setPref('me',me);render(true)}
 export function mePicker(big){const o=S.staff.map(s=>`<option value="${s.id}" ${me===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
  return big?`<div class="card"><h2>あなたの名前を選んでください</h2><p class="small muted" style="margin-bottom:10px">この端末に記憶されます。自分のシフト・有給残日数・申請が表示されます。</p><select id="f_me" onchange="setMe(this.value)"><option value="">選択してください</option>${o}</select></div>`
  :`<label class="row small">あなた：<select onchange="setMe(this.value)">${o}</select></label>`}

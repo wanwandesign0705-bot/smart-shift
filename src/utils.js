@@ -5,7 +5,6 @@ export const $=id=>document.getElementById(id);
 export const pad=n=>String(n).padStart(2,'0'),iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 export const yen=n=>'¥'+Math.round(n).toLocaleString('ja-JP');
 export const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const LS={get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 export const todayD=()=>{const t=new Date();t.setHours(0,0,0,0);return t};
 export const pd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
 export const addM=(s,m)=>{const[y,mo,d]=s.split('-').map(Number);return new Date(y,mo-1+m,d)};

@@ -7,7 +7,7 @@ export function lockScreen(){const blocked=mode==='db'&&!isOwner;
  <button class="lk-l" onclick="showLock=false;render()">スタッフ画面に戻る</button></div></div>`}
 export function unlock(){if($('lkp').value!==S.apw){const b=$('lkb');b.classList.remove('shake');void b.offsetWidth;b.classList.add('shake');$('lkm').textContent='パスワードが違います。もう一度お試しください。';$('lkp').select();return}adminOK=true;showLock=false;render()}
 export function relock(){adminOK=false;sel=null;render()}
-export function go(t){page=null;tab=t;LS.set('ssm_tab',t);sel=null;render();window.scrollTo({top:0,behavior:'smooth'})}
+export function go(t){page=null;tab=t;setPref('tab',t);sel=null;render();window.scrollTo({top:0,behavior:'smooth'})}
 export function banner(){const p=S.plan,left=trialLeft();
  if(p.tier==='trial'&&left>0)return`<div class="banner"><span class="chip a">無料トライアル 残り${left}日</span><span class="small">すべての機能を試せます。終了後はフリープラン（5名まで）になります。</span><button class="b3" onclick="go(6)">プランを選ぶ</button></div>`;
  if(tier()==='free')return`<div class="banner warn"><span class="chip warn">フリープラン</span><span class="small">有給・申請・人件費分析・Excel出力はスタンダードから使えます。</span><button class="b3" onclick="go(6)">アップグレード</button></div>`;return''}
