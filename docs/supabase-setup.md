@@ -1,60 +1,74 @@
 # Supabase の準備と schema.sql の流し方（作業2）
 
-実行はご自身で行ってください。所要時間は20〜30分ほどです。
+この手順は、ご自身で操作していただく部分です。ブラウザだけで終わり、プログラムを入れる必要はありません。
+所要時間は30分ほどです。1つ終わるごとに、「こうなっていればOK」を確かめてから次へ進んでください。
 
-> **画面の項目名について**：この手順を書いた環境からは supabase.com を開けなかったため、メニュー名は2026年時点の知識で書いています。名前が違うときは、管理画面上部の検索（⌘K / Ctrl+K）で「anonymous」「captcha」「connect」などと探してください。
+> **画面の名前について**：この手順を書いた環境からは supabase.com を開けなかったため、ボタンやメニューの名前は2026年時点の知識で書いています。名前が見つからないときは、Supabase の画面の上にある虫めがね（検索）に、手順に書いた英語の言葉を入れて探してください。
 
-## 0. 用意するもの
+## 準備するもの
 
-- `supabase/schema.sql`（設計書に添付のもの。このリポジトリにはまだ入っていません）
-- Supabase のアカウント
-- Cloudflare のアカウント（手順4の Turnstile 用）
+- [ ] パソコンのブラウザ（Chrome がおすすめ）
+- [ ] パスワード管理アプリ、またはパスワードを安全に控えられる場所（紙のメモでも可。チャットやメールには書かない）
+- [ ] `schema.sql` の中身（設計書に添付のもの）
+- [ ] GitHub か Google のアカウント（Supabase の登録に使います）
 
-## 1. プロジェクトを作る
+---
 
-1. Supabase の管理画面で **New project** を押す
-2. 設定する値
-   - Name：`smart-shift-dev`（検証用。本番用は作業10で別に作るか、Pro に上げる）
-   - Region：**Northeast Asia (Tokyo)**
-   - Database Password：**自動生成を使い、パスワード管理アプリに保存する**。チャット・メモ・このリポジトリには書かない
-   - Plan：Free（設計書のとおり、最初の入金までは無料で進める）
-3. 作成が終わるまで1〜2分待つ
+## 手順1：Supabase に登録する
 
-> 無料プロジェクトは1週間使わないと一時停止します。止まったら管理画面の **Restore** で戻せます。
+1. ブラウザで `https://supabase.com` を開く
+2. 右上の **Start your project**（または **Sign in**）を押す
+3. **Continue with GitHub** か、メールアドレスで登録する
+4. 「組織（Organization）を作ってください」と出たら、次のように入れて **Create organization** を押す
+   - Name：`smart-shift`
+   - Type：`Personal`
+   - Plan：`Free - $0/month`
 
-## 2. schema.sql を流す
+✅ **こうなっていればOK**：「Projects」という画面が出て、まだプロジェクトが1つもない状態
 
-### 方法A：管理画面の SQL Editor（おすすめ・道具が不要）
+## 手順2：プロジェクトを作る
 
-1. 左のメニューの **SQL Editor** を開き、**New query** を押す
-2. `supabase/schema.sql` の中身を**全部**貼り付ける
-3. **Run** を押す
-4. 下に `Success. No rows returned` と出れば完了。赤いエラーが出たら、手順6を見る
+1. **New project** を押す
+2. 次のように入れる
 
-> 「破壊的な操作が含まれます」と確認が出たら、新しいプロジェクトに流す場合に限り、そのまま実行して構いません。
+   | 項目 | 入れるもの |
+   |---|---|
+   | Project name | `smart-shift-dev` |
+   | Database Password | 右の **Generate a password** を押して自動で作る |
+   | Region | `Northeast Asia (Tokyo)` |
 
-### 方法B：自分のパソコンから psql で流す
+3. **Database Password をコピーして、パスワード管理アプリに保存する**
+   - このパスワードは、あとで画面からは見られません
+   - チャット（Claude を含む）、メール、LINE には貼らないでください
+4. **Create new project** を押す
+5. 1〜2分待つ（「Setting up project」と出ている間は待つ）
 
-`psql`（PostgreSQL 16 以上のクライアント）が入っている場合の方法です。
+✅ **こうなっていればOK**：プロジェクトの最初の画面（Project Overview）が出る
 
-1. 管理画面の上にある **Connect** を押し、**Session pooler** の接続文字列をコピーする
-   （Direct connection は IPv6 専用で、家庭や会社の回線ではつながらないことがあります）
-2. `.env.example` をコピーして `.env` を作り、`SUPABASE_DB_URL=` の行に貼る。`[YOUR-PASSWORD]` の部分は手順1のパスワードに置き換える。`.env` は git に入りません
-3. 次のコマンドで流す。途中でエラーが出たら、そこで止まります
+> 無料のプロジェクトは、1週間使わないと止まります。止まっていたら、プロジェクトを開いて **Restore project** を押せば戻ります。
 
-```bash
-set -a; . ./.env; set +a
-```
+## 手順3：schema.sql を流す
 
-```bash
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
-```
+1. 左のメニューから **SQL Editor**（`>_` のような印）を押す
+2. 左上の **＋**（または **New query**）を押す。白い入力欄が出る
+3. `schema.sql` をメモ帳などで開き、**中身を全部コピー**する
+   - Windows：`Ctrl` + `A` で全部選んでから `Ctrl` + `C`
+   - Mac：`⌘` + `A` で全部選んでから `⌘` + `C`
+4. Supabase の白い入力欄をクリックし、貼り付ける（`Ctrl` + `V` / `⌘` + `V`）
+5. 右下の緑の **Run** を押す
+6. 「このクエリは破壊的な操作を含みます」という確認が出たら、**Run this query** を押す
+   （新しく作ったばかりのプロジェクトなので、消えて困るものはありません）
 
-## 3. 正しく入ったか確かめる
+✅ **こうなっていればOK**：下の欄に `Success. No rows returned` と出る
 
-SQL Editor で、次の3つを1つずつ実行します。
+❌ **赤い文字のエラーが出たら**：エラーの文章をそのままコピーして、Claude に貼ってください。パスワードは含まれていないので、貼って大丈夫です
 
-**テーブルが20個あり、すべてに行単位のアクセス制御（RLS）が付いているか**
+## 手順4：正しく入ったか確かめる
+
+手順3と同じ SQL Editor を使います。下の枠の文章を、**1つずつ**入れ替えて Run を押します。
+
+1. 入力欄の中身を消す（`Ctrl` + `A` → `Delete`）
+2. 次の文章を貼って **Run**
 
 ```sql
 select c.relname as テーブル, c.relrowsecurity as rls
@@ -63,9 +77,9 @@ where n.nspname = 'public' and c.relkind = 'r'
 order by 1;
 ```
 
-→ 20行出て、`rls` がすべて `true` なら合格。`false` が1つでもあれば、そのテーブルは誰でも読めてしまうので、使い始める前に知らせてください。
+✅ **こうなっていればOK**：表が20行出て、右の `rls` の列がすべて `true`
 
-**設計書にある関数がそろっているか**
+3. もう一度入力欄の中身を消し、次の文章を貼って **Run**
 
 ```sql
 select p.proname as 関数
@@ -75,42 +89,93 @@ where n.nspname = 'public'
 order by 1;
 ```
 
-→ 5行出れば合格。
+✅ **こうなっていればOK**：表が5行出る
 
-**ログインしていない人から中身が見えないか**
+📝 **Claude に伝えること**：①の行数と、`rls` に `false` があったかどうか、②の行数。
+`false` が1つでもあると、そのテーブルは誰でも読めてしまうので、作業3に進む前に直します。
 
-管理画面の **Table Editor** で `stores` などを開くと中が見えますが、これは管理者の権限で見ているためです。画面のコードから確かめるのは作業3で行います。
+## 手順5：スタッフの「招待リンクだけで参加」をオンにする
 
-## 4. ログインの設定
+1. 左のメニューの **Authentication**（人の形の印）を押す
+2. **Sign In / Providers**（古い画面では **Providers**）を押す
+3. **Allow anonymous sign-ins** のスイッチを**オン**にして、**Save** を押す
+4. 同じ画面の一覧で **Email** がオン（Enabled）になっていることを確かめる。**Confirm email** もオンのままにする
 
-1. **Authentication → Sign In / Providers**
-   - **Email**：オン（店長がメールとパスワードで登録する）。「Confirm email」もオンのまま
-   - **Allow anonymous sign-ins**：**オン**（スタッフが招待リンクだけで参加するため）
-2. **Authentication → Attack Protection**（古い画面では Auth の設定の中）
-   - **Enable CAPTCHA protection** をオンにし、Provider に **Cloudflare Turnstile** を選ぶ
-   - Cloudflare の管理画面 → **Turnstile** → **Add widget** でサイトを作る。ドメインには、開発中は `localhost` を入れる
-   - Cloudflare に出る **Secret Key** を Supabase の欄に貼る。**Site Key** はあとで画面に入れるので控えておく（Site Key は公開してよい値、Secret Key は公開してはいけない値です）
-   - CAPTCHA をオンにすると、作業3で作る登録・ログインの画面が Turnstile の確認結果を一緒に送らないと、ログインできなくなります。作業3の前にオンにしても、今の画面には影響しません
+✅ **こうなっていればOK**：Allow anonymous sign-ins がオン、Email が Enabled
 
-## 5. 画面から使う値を .env に入れる
+## 手順6：ロボットによる大量登録を防ぐ（Cloudflare Turnstile）
 
-**Project Settings → API**（または **Connect** の中の **App Frameworks**）から、次の2つを `.env` に入れます。
+ここは少し長いので、時間があるときで構いません。作業3（ログイン画面づくり）の前までに終わっていれば大丈夫です。
+
+**6-1. Cloudflare で鍵を作る**
+
+1. `https://dash.cloudflare.com` を開き、アカウントを作る（無料）
+2. 左のメニューの **Turnstile** を押す
+3. **Add widget** を押し、次のように入れる
+   - Widget name：`smart-shift`
+   - Hostname：`localhost`（公開するときに、本番のドメインを足します）
+   - Widget Mode：`Managed`
+4. **Create** を押す
+5. **Site Key** と **Secret Key** の2つが出る。両方をパスワード管理アプリに保存する
+   - Site Key：画面に埋め込む値。人に見えても大丈夫です
+   - Secret Key：**秘密の値**。チャットには貼らないでください
+
+**6-2. Supabase に鍵を入れる**
+
+1. Supabase に戻り、**Authentication** → **Attack Protection** を押す
+2. **Enable Captcha protection** をオンにする
+3. Choose Captcha Provider で **Turnstile by Cloudflare** を選ぶ
+4. Captcha secret の欄に、6-1 の **Secret Key** を貼る
+5. **Save** を押す
+
+✅ **こうなっていればOK**：Captcha protection がオンで、Turnstile が選ばれている
+
+> これをオンにすると、作業3で作るログイン画面が Turnstile の確認を通らないとログインできなくなります。今の画面（ブラウザ内保存の版）には影響しません。
+
+## 手順7：あとで使う値を控える
+
+1. 左下の歯車 **Project Settings** → **API**（または画面上の **Connect** ボタン）を開く
+2. 次の2つをパスワード管理アプリに控える
+   - **Project URL**（`https://〜.supabase.co` の形）
+   - **anon public** と書かれた長いキー
+3. **service_role** と書かれたキーは、**控えなくてよいし、どこにも貼らないでください**
+   （これはすべての店舗のデータを読み書きできる鍵です。アプリの画面には絶対に入れません）
+
+この2つの値は、作業3でアプリの設定ファイル（`.env`）に入れます。そのときの手順はまた1つずつお伝えします。
+
+---
+
+## 終わったら
+
+Claude に次のように伝えてください。
 
 ```
-VITE_SUPABASE_URL=https://（プロジェクトID）.supabase.co
-VITE_SUPABASE_ANON_KEY=（anon public キー）
+Supabase の準備が終わりました。
+手順4の①：〇行、rls に false は（ある／ない）
+手順4の②：〇行
+手順6（Turnstile）：（終わった／まだ）
 ```
 
-- anon キーはブラウザに配られる前提の値で、守りは手順3の RLS が担います
-- **service_role キーは絶対に入れないでください。** RLS を素通りして全店舗のデータを読み書きできる鍵です。画面のコードにも `.env` にも置きません（運営者用の処理で必要になったら、Edge Function の秘密の設定に入れます）
+---
 
-## 6. うまくいかないとき
+## 付録：慣れている人向け（psql で流す方法）
 
-| 症状 | 原因と対処 |
+ターミナルと PostgreSQL 16 以上の `psql` が使える場合は、SQL Editor の代わりにこちらでも流せます。初めての方は使わなくて大丈夫です。
+
+1. Supabase の画面上の **Connect** → **Session pooler** の接続文字列をコピーする（Direct connection は IPv6 専用で、つながらないことが多い）
+2. `.env.example` をコピーして `.env` を作り、`SUPABASE_DB_URL=` の行に貼る。`[YOUR-PASSWORD]` を手順2のパスワードに置き換える。`.env` は git に入りません
+3. 次を実行する
+
+```bash
+set -a; . ./.env; set +a
+```
+
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
+```
+
+| 症状 | 対処 |
 |---|---|
-| `already exists` のエラー | 一度途中まで流れています。検証用のプロジェクトなら、プロジェクトを作り直して最初から流すのが確実です |
-| `permission denied` | SQL Editor ではなく、権限の弱い接続で流しています。方法Aで流し直してください |
-| psql が `could not translate host name` | Direct connection の接続文字列を使っています。Session pooler の文字列に替えてください |
-| psql が `password authentication failed` | 接続文字列の `[YOUR-PASSWORD]` を置き換え忘れているか、パスワードに `@` などの記号が入っています。記号は URL 用に変換するか、パスワードを作り直してください |
-
-終わったら、手順3の2つの確認結果（テーブル数と `rls` の値、関数の数）を教えてください。作業3（店長の登録とログイン）に進みます。
+| `already exists` | 途中まで流れています。検証用なら、プロジェクトを作り直して最初から流すのが確実です |
+| `could not translate host name` | Direct connection の文字列です。Session pooler の文字列に替えてください |
+| `password authentication failed` | `[YOUR-PASSWORD]` の置き換え忘れか、パスワードの `@` などの記号が原因です |
