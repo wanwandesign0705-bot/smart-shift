@@ -11,7 +11,10 @@ fs.mkdirSync(outDir, { recursive: true });
 
 // アーティファクトは本文の外側に最小の HTML を付けて配信していた。比較のため同じ形で包む
 const skeleton = '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>'
-  + fs.readFileSync(origFile, 'utf8') + '</body></html>';
+  // 2026-11-23 にアプリ名を「Smart Shift」に変えたので、基準の v2.3 も同じ名前に読み替えてから比べる
+  + fs.readFileSync(origFile, 'utf8').replaceAll('Smart Shift Manager', 'Smart Shift')
+      .replace('サービス「Smart Shift」（以下「本サービス」）', 'サービス「Smart Shift（スマートシフト）」（以下「本サービス」）')
+  + '</body></html>';
 const wrapped = path.join(outDir, '_v23.html');
 fs.writeFileSync(wrapped, skeleton);
 

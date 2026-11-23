@@ -1,4 +1,4 @@
-# Smart Shift Manager
+# Smart Shift
 
 シフト作成・労務管理アプリ。claude.ai のアーティファクト版（v2.3）を、本番用の Web アプリに移している途中です。
 設計書：https://claude.ai/artifact/HGSh5Me5bMaYkWoJ7SvRkU

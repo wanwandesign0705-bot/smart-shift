@@ -2,7 +2,7 @@
 // 画面の onclick と他のファイルから名前だけで呼べます（v2.3 の1ファイル版と同じ動き）。
 /* ===================== ロック画面・全体 ===================== */
 export function lockScreen(){const blocked=mode==='db'&&!isOwner;
- return`<div class="lk"><div class="lk-in"><div class="lk-mark">${icon('lock')}</div><div class="lk-eye">ADMINISTRATOR</div><div class="lk-t">Smart Shift Manager</div><div class="lk-s">管理者ログイン　チームの時間を、もっとスムーズに。</div>
+ return`<div class="lk"><div class="lk-in"><div class="lk-mark">${icon('lock')}</div><div class="lk-eye">ADMINISTRATOR</div><div class="lk-t">Smart Shift</div><div class="lk-s">管理者ログイン　チームの時間を、もっとスムーズに。</div>
  ${blocked?`<p class="lk-m" style="color:var(--fg)">管理画面はこのページのオーナーだけが開けます。</p>`:`<div id="lkb"><input id="lkp" class="lk-i" type="password" autocomplete="off" placeholder="管理者パスワードを入力" onkeydown="if(event.key==='Enter')unlock()"></div><button class="lk-b" onclick="unlock()">ロックを解除する</button><div id="lkm" class="lk-m"></div>`}
  <button class="lk-l" onclick="showLock=false;render()">スタッフ画面に戻る</button></div></div>`}
 export function unlock(){if($('lkp').value!==S.apw){const b=$('lkb');b.classList.remove('shake');void b.offsetWidth;b.classList.add('shake');$('lkm').textContent='パスワードが違います。もう一度お試しください。';$('lkp').select();return}adminOK=true;showLock=false;render()}
@@ -16,7 +16,7 @@ export function render(fresh){
  const keep={};if(!fresh)document.querySelectorAll('#app [id^="f_"]').forEach(e=>keep[e.id]=e.type==='checkbox'?e.checked:e.value);const fid=document.activeElement&&document.activeElement.id;
  const lk=showLock&&!adminOK;$('hd').hidden=$('tabs').hidden=lk;
  const sync=mode==='db'?(cfgReady?'<span class="chip ok">共有中</span>':'<span class="chip">同期中…</span>'):'<span class="chip" title="データはこのブラウザ内に保存されます">この端末に保存</span>';
- $('hd').innerHTML=`<div class="brand"><div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 15h3"/></svg></div><b>Smart Shift Manager</b>${sync}</div>`+`<div class="row"><button class="b2" onclick="openUpd()">アップデート情報${isNewUpd()?' <span class="chip bad">NEW</span>':''}</button>`+
+ $('hd').innerHTML=`<div class="brand"><div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 15h3"/></svg></div><b>Smart Shift</b>${sync}</div>`+`<div class="row"><button class="b2" onclick="openUpd()">アップデート情報${isNewUpd()?' <span class="chip bad">NEW</span>':''}</button>`+
   (adminOK?`<div class="row"><span class="chip a">管理者モード・${PLANS[tier()].name}${S.plan.tier==='trial'&&trialLeft()>0?'（トライアル）':''}</span><button class="b2" onclick="relock()">ロックしてスタッフ画面へ</button></div>`:`<button class="b" onclick="showLock=true;render()">管理者メニュー</button>`)+'</div>';
  const pc=R.filter(r=>r.status==='pending').length;
  $('tabs').className=adminOK?'tabs':'';

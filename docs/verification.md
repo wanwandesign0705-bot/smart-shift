@@ -41,3 +41,7 @@ npm run compare
 ```
 
 画像は `compare-output/` に出ます（`v23-…` と `vite-…` が同じ画面の組です）。Playwright が入っている環境で動きます。
+
+## アプリ名の変更（2026-11-23）
+
+アプリ名を「Smart Shift Manager」から「Smart Shift」に変えました。比較スクリプトは、基準の v2.3 の名前も「Smart Shift」に読み替えてから比べます。名前を変えたあとも、66項目（64画面と保存の中身）すべて一致しました。
