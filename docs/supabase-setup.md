@@ -9,7 +9,7 @@
 
 - [ ] パソコンのブラウザ（Chrome がおすすめ）
 - [ ] パスワード管理アプリ、またはパスワードを安全に控えられる場所（紙のメモでも可。チャットやメールには書かない）
-- [ ] `schema.sql` の中身（設計書に添付のもの）
+- [ ] GitHub にログインできること（`schema.sql` は GitHub の smart-shift リポジトリの `supabase/schema.sql` にあります）
 - [ ] GitHub か Google のアカウント（Supabase の登録に使います）
 
 ---
@@ -49,14 +49,16 @@
 
 ## 手順3：schema.sql を流す
 
-1. 左のメニューから **SQL Editor**（`>_` のような印）を押す
+1. Supabase でプロジェクトを開き、左のメニューから **SQL Editor**（日本語の画面では「SQL エディタ」。`>_` のような印）を押す
 2. 左上の **＋**（または **New query**）を押す。白い入力欄が出る
-3. `schema.sql` をメモ帳などで開き、**中身を全部コピー**する
-   - Windows：`Ctrl` + `A` で全部選んでから `Ctrl` + `C`
-   - Mac：`⌘` + `A` で全部選んでから `⌘` + `C`
-4. Supabase の白い入力欄をクリックし、貼り付ける（`Ctrl` + `V` / `⌘` + `V`）
-5. 右下の緑の **Run** を押す
-6. 「このクエリは破壊的な操作を含みます」という確認が出たら、**Run this query** を押す
+3. ブラウザで新しいタブを開き、次のページを開く
+   `https://github.com/wanwandesign0705-bot/smart-shift/blob/main/supabase/schema.sql`
+4. ファイルの中身の右上にある **四角が2つ重なった印（Copy raw file）** を押す。これで中身が全部コピーされる
+   （印が見つからないときは、**Raw** を押して開いたページで、Windows は `Ctrl` + `A` → `Ctrl` + `C`、Mac は `⌘` + `A` → `⌘` + `C`）
+5. Supabase のタブに戻り、白い入力欄をクリックして貼り付ける（Windows は `Ctrl` + `V`、Mac は `⌘` + `V`）
+   一番上が `-- =====` で始まり、一番下が `('customer_portal_url'), ('legal_version');` で終わっていれば、全部貼れています
+6. 右下の緑の **Run**（日本語の画面では「実行」）を押す
+7. 「このクエリは破壊的な操作を含みます」という確認が出たら、**Run this query**（実行する）を押す
    （新しく作ったばかりのプロジェクトなので、消えて困るものはありません）
 
 ✅ **こうなっていればOK**：下の欄に `Success. No rows returned` と出る
