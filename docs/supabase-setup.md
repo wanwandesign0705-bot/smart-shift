@@ -63,6 +63,8 @@
 
 ✅ **こうなっていればOK**：下の欄に `Success. No rows returned` と出る
 
+⚠️ 成功したあとは、この709行の **Run をもう一度押さないでください**。2回目は「already exists（すでにあります）」というエラーになります（壊れはしません）。手順4は、タブの右の **＋** で新しい入力欄を開いてから進めてください。
+
 ❌ **赤い文字のエラーが出たら**：エラーの文章をそのままコピーして、Claude に貼ってください。パスワードは含まれていないので、貼って大丈夫です
 
 ## 手順4：正しく入ったか確かめる
@@ -124,7 +126,7 @@ order by 1;
 
 **6-2. Supabase に鍵を入れる**
 
-1. Supabase に戻り、**Authentication** → **Attack Protection** を押す
+1. Supabase に戻り、左のメニューの **Authentication**（錠前のような印）を押す。画面の左に Authentication の中の一覧が出るので、その中の **Attack Protection** を押す（見つからないときは、画面上の検索欄に `captcha` と入れる）
 2. **Enable Captcha protection** をオンにする
 3. Choose Captcha Provider で **Turnstile by Cloudflare** を選ぶ
 4. Captcha secret の欄に、6-1 の **Secret Key** を貼る
