@@ -1,6 +1,6 @@
 // v2.3（1ファイル版）と Vite 版を同じ操作で動かし、各画面のスクリーンショットが一致するか比べる。
 // 使い方（docs/verification.md も参照）：
-//   npm run build
+//   npm run build:local                          ← Supabase を使わない版を作る（v2.3 と比べるのはこちら）
 //   npx vite preview --port 4173 --strictPort    ← 別のターミナルで起動したままにする
 //   npm run compare
 // 引数で変えられる：node scripts/compare-with-v23.cjs [v2.3のHTML] [Vite版のURL] [画像の出力先]

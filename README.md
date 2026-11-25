@@ -11,7 +11,15 @@ npm run dev      # 開発用サーバー（http://localhost:5173）
 npm run build    # 公開用のファイルを dist/ に作る
 ```
 
-管理者パスワードの初期値は `admin` です（v2.3 と同じ）。
+`.env.example` をコピーして `.env` を作り、Supabase の値を入れると、「管理者メニュー」が店長のログイン画面になります（`docs/account.md`）。
+`.env` に値がないときは、管理者パスワード（初期値 `admin`）のロック画面で動きます（v2.3 と同じ）。
+
+テスト：
+
+```bash
+npm run test:account   # 店長の登録・ログイン・お店の作成の流れ（Supabase への通信はテストが受け取る）
+npm run test:schema    # schema.sql の守り（PostgreSQL 16 が必要）
+```
 
 ## ファイルの構成
 
@@ -25,6 +33,7 @@ npm run build    # 公開用のファイルを dist/ に作る
 | `src/data.js` | **データ層**。読み込み・保存はすべてここを通す（いまはブラウザ内。Supabase に替えるときはこのファイルだけを書き換える） |
 | `src/state.js` | 店舗データのひな形と、画面どうしで共有する変数 |
 | `src/export.js` | Excel 出力 |
+| `src/views/account.js` | 店長のログイン・新規登録・規約への同意・お店の作成（作業3） |
 | `src/views/` | 画面ごとのファイル（管理者の7タブ、スタッフ画面、シフト表、予約、アップデート情報と規約、ロック画面と全体の描画） |
 
 ### いまの書き方について

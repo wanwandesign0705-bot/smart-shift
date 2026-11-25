@@ -25,9 +25,10 @@ import * as adminPlan from './views/admin-plan.js';
 import * as staff from './views/staff.js';
 import * as infoPages from './views/info-pages.js';
 import * as shell from './views/shell.js';
+import * as account from './views/account.js';
 
 const modules = { constants, law, updates, legal, utils, data, state, plan, period, calc, exporter, reservations, grid,
-  adminShift, adminRequests, adminLeave, adminAnalysis, adminNotices, adminSettings, adminPlan, staff, infoPages, shell };
+  adminShift, adminRequests, adminLeave, adminAnalysis, adminNotices, adminSettings, adminPlan, staff, infoPages, shell, account };
 
 const seen = {};
 for (const [file, mod] of Object.entries(modules)) {
@@ -46,4 +47,20 @@ initState().then(() => {
   if (!Object.keys(S.grid).length) { gen(); msg = ''; }
   render();
   if (returning && isNewUpd()) whatsNew();
+  if (cloudEnabled) startAccount();
 });
+
+// 店長のログイン状態を見張る（Supabase を使うときだけ）
+function startAccount() {
+  onAccountChange(event => {
+    // この中で Supabase を直接呼ぶと止まることがあるため、ひと呼吸おいてから読み直す
+    setTimeout(async () => {
+      if (event === 'PASSWORD_RECOVERY') { authStep = 'newpass'; showLock = true; }
+      if (event === 'INITIAL_SESSION') return;
+      await refreshAccount();
+      // メールの確認リンクから戻ってきたときは、続き（同意・お店の作成）の画面を開く
+      if (event === 'SIGNED_IN' && acct.user && !acct.user.is_anonymous && !acctReady()) { showLock = true; render(); }
+    }, 0);
+  });
+  refreshAccount();
+}

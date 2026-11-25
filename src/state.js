@@ -23,7 +23,9 @@ export async function initState(){
  if(!S){const old=loadLegacyStore();S=old?migrate(old):def()}else S=migrate(S);
  Object.assign(window,{S,R:await loadRequests(),DB:null,USER:null,mode:'local',isOwner:false,cfgReady:true,myUid:null,
   me:getPref('me'),adminOK:false,showLock:false,tab:getPref('tab')||0,sv:0,av:'shift',sel:null,resDay:null,msg:'',cycle:S.plan.cycle||'m',
-  curStart:iso(new Date()),page:null,updSeen:getPref('seenVersion'),returning:hasSavedStore()});
+  curStart:iso(new Date()),page:null,updSeen:getPref('seenVersion'),returning:hasSavedStore(),
+  // 店長のアカウント（Supabase を使うときだけ）
+  acct:{loading:cloudEnabled,user:null,consented:false,store:null},authStep:'login',authMsg:'',authBusy:false,captchaToken:null,authEmail:''});
  norm();
  if(!updSeen&&!returning)setPref('seenVersion',APP_VER);
 }

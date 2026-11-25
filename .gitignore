@@ -7,3 +7,4 @@ dist/
 *.local
 # 見た目の比較で出る画像
 compare-output/
+dist-test/
