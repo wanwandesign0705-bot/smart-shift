@@ -23,12 +23,28 @@ export function enterAdmin() { adminOK = true; showLock = false; authStep = 'log
 export async function refreshAccount() {
   try { acct = { ...(await loadAccount()), loading: false }; }
   catch (e) { acct = { user: null, consented: false, store: null, loading: false, error: accountError(e) }; }
+  if (acctReady() && !cloudStoreOpen()) await loadCloudStoreIntoApp();
   if (showLock && acctReady()) enterAdmin();
   render();
 }
 
+/** お店のデータを Supabase から読み込み、画面に出す（作業4） */
+export async function loadCloudStoreIntoApp() {
+  storeLoadError = '';
+  try { S = await openCloudStore(acct.store.id); mode = 'db'; cfgReady = true; sel = null; norm(); }
+  catch (e) { storeLoadError = accountError(e); }
+}
+export async function retryStoreLoad() { await loadCloudStoreIntoApp(); render(); }
+
 export async function logout() {
+  if (cloudUnsaved() && !confirmLogout) {
+    confirmLogout = true; toast('まだ送っていない変更があります。もう一度ログアウトを押すと、送らずにログアウトします'); return;
+  }
+  confirmLogout = false;
   await signOut();
+  closeCloudStore();
+  // この端末に、お店のデータ（時給など）を残さない。画面はこの端末の保存に戻す
+  const local = loadStore(); S = local ? migrate(local) : def(); mode = 'local';
   acct = { user: null, consented: false, store: null, loading: false };
   adminOK = false; showLock = false; authStep = 'login'; sel = null;
   toast('ログアウトしました'); render(true);
@@ -151,13 +167,10 @@ export function doCreateStore() {
       if (!e.storeCreated) throw e;
       toast('お店は作れましたが、テンプレートの一部を入れられませんでした。設定画面で確認してください');
     }
-    // 管理画面（作業4までは、この端末に保存）にも同じテンプレートを入れる
-    Object.assign(S, build(industry));
-    if (!sample) S.staff = [];
-    S.grid = {}; S.wish = {}; S.memo = {}; S.company = size;
-    save(); gen(); msg = '';
+    // 作ったお店を Supabase から読み込み、今月のシフトを自動作成して保存する
     authMsg = '';
     await refreshAccount();
+    if (cloudStoreOpen()) { gen(); msg = ''; }
     if (store) toast(`「${name}」を作りました。2ヶ月の無料トライアルが始まりました`);
   });
 }
@@ -230,4 +243,11 @@ export function accountScreen() {
       <button class="lk-l" onclick="logout()">ログアウト</button>`);
   }
   return frame('準備ができました', '', `<button class="lk-b" onclick="enterAdmin();render()">管理画面を開く</button>`);
+}
+
+/** お店のデータを読み込んでいる間（または読み込めなかったとき）の管理画面 */
+export function storeLoadingView() {
+  if (storeLoadError) return `<div class="card" style="max-width:640px;margin:0 auto"><h2>お店のデータを読み込めませんでした</h2>
+    <p class="small" style="color:var(--bad);margin-bottom:12px">${esc(storeLoadError)}</p><div class="row"><button class="b" onclick="retryStoreLoad()">もう一度読み込む</button><button class="b2" onclick="logout()">ログアウト</button></div></div>`;
+  return `<div class="card empty" style="max-width:640px;margin:0 auto">お店のデータを読み込んでいます…</div>`;
 }

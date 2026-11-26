@@ -14,14 +14,14 @@ export function banner(){const p=S.plan,left=trialLeft();
 export const ATABS=['シフト作成','申請・承認','有給管理','人件費・労務','社内連絡','設定','プラン・お支払い'];
 export function render(fresh){
  const keep={};if(!fresh)document.querySelectorAll('#app [id^="f_"]').forEach(e=>keep[e.id]=e.type==='checkbox'?e.checked:e.value);const fid=document.activeElement&&document.activeElement.id;
- const lk=showLock&&!adminOK&&!page; // 規約のページは、ログインの途中でも開ける$('hd').hidden=$('tabs').hidden=lk;
- const sync=mode==='db'?(cfgReady?'<span class="chip ok">共有中</span>':'<span class="chip">同期中…</span>'):'<span class="chip" title="データはこのブラウザ内に保存されます">この端末に保存</span>';
+ const lk=showLock&&!adminOK&&!page;/* 規約のページは、ログインの途中でも開ける */$('hd').hidden=$('tabs').hidden=lk;
+ const ss=cloudSaveState(),sync=ss!=='local'?(ss==='saved'?'<span class="chip ok" title="お店のデータは Supabase に保存されています">保存済み</span>':ss==='error'?'<span class="chip bad">保存できません</span>':'<span class="chip">保存中…</span>'):mode==='db'?(cfgReady?'<span class="chip ok">共有中</span>':'<span class="chip">同期中…</span>'):'<span class="chip" title="データはこのブラウザ内に保存されます">この端末に保存</span>';
  $('hd').innerHTML=`<div class="brand"><div class="brand-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 15h3"/></svg></div><b>Smart Shift</b>${sync}</div>`+`<div class="row"><button class="b2" onclick="openUpd()">アップデート情報${isNewUpd()?' <span class="chip bad">NEW</span>':''}</button>`+
   (adminOK?`<div class="row"><span class="chip a">管理者モード・${PLANS[tier()].name}${S.plan.tier==='trial'&&trialLeft()>0?'（トライアル）':''}</span>${cloudEnabled&&acct.store?`<span class="chip" title="${esc(acct.user&&acct.user.email||'')}">${esc(acct.store.name)}</span>`:''}<button class="b2" onclick="relock()">ロックしてスタッフ画面へ</button>${cloudEnabled?'<button class="b2" onclick="logout()">ログアウト</button>':''}</div>`:`<button class="b" onclick="openAdmin()">管理者メニュー</button>`)+'</div>';
  const pc=R.filter(r=>r.status==='pending').length;
  $('tabs').className=adminOK?'tabs':'';
  $('tabs').innerHTML=adminOK?ATABS.map((n,i)=>`<button class="tab ${tab===i&&!page?'on':''}" onclick="go(${i})">${n}${i===1&&pc?` <span class="dot">${pc}</span>`:''}</button>`).join(''):'';
- $('app').innerHTML=lk?lockScreen():maintBanner()+(page==='upd'?tabUpd():page?tabLegal(page):!adminOK?tabStaff():!cloudEnabled&&!S.consent?consentView():banner()+[tabShift,tabReqs,tabPL,tabAnalysis,tabNotice,tabSettings,tabPlan][tab]())+footer();
+ $('app').innerHTML=lk?lockScreen():maintBanner()+(page==='upd'?tabUpd():page?tabLegal(page):!adminOK?tabStaff():!cloudEnabled&&!S.consent?consentView():cloudEnabled&&!cloudStoreOpen()?storeLoadingView():banner()+[tabShift,tabReqs,tabPL,tabAnalysis,tabNotice,tabSettings,tabPlan][tab]())+footer();
  for(const id in keep){const e=$(id);if(e){if(e.type==='checkbox')e.checked=keep[id];else if(e.tagName!=='SELECT'||[...e.options].some(o=>o.value===keep[id]))e.value=keep[id]}}
  if(fid&&$(fid)&&fid.startsWith('f_'))$(fid).focus();
  drw();if(lk&&cloudEnabled)mountTurnstile();else if(lk)setTimeout(()=>{const i=$('lkp');i&&i.focus()},50)}

@@ -50,6 +50,9 @@ initState().then(() => {
   if (cloudEnabled) startAccount();
 });
 
+// Supabase にまだ送っていない変更があるときは、ページを閉じる前に確かめる
+window.addEventListener('beforeunload', e => { if (cloudUnsaved()) { e.preventDefault(); e.returnValue = ''; } });
+
 // 店長のログイン状態を見張る（Supabase を使うときだけ）
 function startAccount() {
   onAccountChange(event => {

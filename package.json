@@ -10,7 +10,8 @@
     "compare": "node scripts/compare-with-v23.cjs",
     "build:local": "VITE_SUPABASE_URL= VITE_SUPABASE_PUBLISHABLE_KEY= vite build",
     "test:account": "node tests/account-flow.cjs",
-    "test:schema": "bash tests/run-schema-test.sh"
+    "test:schema": "bash tests/run-schema-test.sh",
+    "test:cloud": "node tests/cloud-store.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

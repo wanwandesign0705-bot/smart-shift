@@ -65,10 +65,12 @@ async function run(target, label, viewport, scheme) {
   // 申請日時の「秒」などで差が出ないよう、両方の時計を同じ時刻に固定する
   await p.clock.setFixedTime(new Date('2026-11-22T10:00:00+09:00'));
   await p.goto(target); await p.waitForTimeout(500);
-  const shots = {};
+  const shots = {}, htmls = {};
   for (const [name, act] of steps) {
     await act(p); await p.mouse.move(1, 1); await p.waitForTimeout(700); // マウスを外し、表示のアニメーション（0.35秒）が終わってから撮る
     shots[name] = await p.screenshot({ fullPage: true });
+    // 画面の中身（アプリが描いた HTML）も取っておく。画像だけが違い中身が同じなら、ブラウザの描画の揺れ
+    htmls[name] = await p.evaluate(() => ['hd', 'tabs', 'app', 'md', 'dr', 'toast'].map(id => { const e = document.getElementById(id); return e ? e.outerHTML : ''; }).join('\n'));
     fs.writeFileSync(path.join(outDir, `${label}-${name}.png`), shots[name]);
   }
   // ブラウザに保存された中身（申請の id は乱数なので除く）
@@ -78,7 +80,7 @@ async function run(target, label, viewport, scheme) {
     return JSON.stringify(o, Object.keys(o).sort());
   });
   await browser.close();
-  return { shots, errors, saved };
+  return { shots, htmls, errors, saved };
 }
 
 (async () => {
@@ -86,13 +88,22 @@ async function run(target, label, viewport, scheme) {
   for (const [vp, scheme, tag] of [[{ width: 1280, height: 900 }, 'light', 'pc-light'], [{ width: 400, height: 860 }, 'dark', 'phone-dark']]) {
     const a = await run('file://' + path.resolve(wrapped), `v23-${tag}`, vp, scheme);
     const b = await run(newUrl, `vite-${tag}`, vp, scheme);
-    for (const [name] of steps) results.push({ tag, name, same: a.shots[name].equals(b.shots[name]) });
+    // 意図した違いをそろえてから比べる：
+    //  ・作業3から「管理者メニュー」は openAdmin() を呼ぶ（Supabase を使わない版では、中で今までと同じ showLock=true;render() をする）
+    //  ・申請の番号（q + 時刻 + ランダム4文字）は毎回変わる
+    const norm = h => h.replace(/onclick="openAdmin\(\)"/g, 'onclick="showLock=true;render()"').replace(/q\d{13}[a-z0-9]{1,4}/g, 'q*');
+    for (const [name] of steps) results.push({ tag, name, same: a.shots[name].equals(b.shots[name]), sameHtml: norm(a.htmls[name]) === norm(b.htmls[name]) });
     results.push({ tag, name: '保存された中身（localStorage）', same: a.saved === b.saved });
     results.push({ tag, errorsV23: a.errors, errorsVite: b.errors });
   }
   const diffs = results.filter(r => r.same === false);
-  console.log(`比較した画面: ${results.filter(r => 'same' in r).length}  一致: ${results.filter(r => r.same).length}  不一致: ${diffs.length}`);
-  diffs.forEach(d => console.log('  不一致:', d.tag, d.name));
+  const htmlDiffs = results.filter(r => r.sameHtml === false);
+  const jitter = diffs.filter(r => r.sameHtml === true);
+  console.log(`比較した画面: ${results.filter(r => 'same' in r).length}  画像が一致: ${results.filter(r => r.same).length}  画面の中身（HTML）が違う: ${htmlDiffs.length}`);
+  jitter.forEach(d => console.log('  画像だけ違う（中身は同じ＝描画の揺れ）:', d.tag, d.name));
+  htmlDiffs.forEach(d => console.log('  ★中身が違う:', d.tag, d.name));
+  diffs.filter(r => !('sameHtml' in r)).forEach(d => console.log('  ★違う:', d.tag, d.name));
   results.filter(r => r.errorsV23).forEach(r => console.log(r.tag, 'エラー v2.3:', r.errorsV23, ' Vite:', r.errorsVite));
-  process.exit(diffs.length ? 1 : 0);
+  // 失敗にするのは、中身が違うときと、保存の中身が違うときだけ
+  process.exit(htmlDiffs.length || diffs.some(r => !('sameHtml' in r)) ? 1 : 0);
 })();

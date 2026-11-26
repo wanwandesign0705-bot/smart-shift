@@ -20,37 +20,12 @@ function ok(name, cond, detail = '') {
   passed++; console.log('PASS: ' + name);
 }
 
-// ---- 偽の Supabase ----
-function fakeJwt(sub) {
-  const b = o => Buffer.from(JSON.stringify(o)).toString('base64url');
-  return b({ alg: 'HS256', typ: 'JWT' }) + '.' + b({ sub, role: 'authenticated', aud: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600, is_anonymous: false }) + '.sig';
-}
-const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'tencho@example.com', aud: 'authenticated', role: 'authenticated', is_anonymous: false, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
-const db = { consents: [], store: null, requests: [] };
-function session() { return { access_token: fakeJwt(USER.id), token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: 'refresh', user: USER }; }
-
-async function handle(route) {
-  const req = route.request(), url = new URL(req.url()), p = url.pathname, method = req.method();
-  let body = null; try { body = req.postDataJSON(); } catch (e) { body = req.postData(); }
-  db.requests.push({ method, path: p, search: url.search, body });
-  const json = (status, data) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
-  if (p === '/auth/v1/signup') return json(200, { ...USER, email: body.email, email_confirmed_at: null, identities: [{}] });
-  if (p === '/auth/v1/token') {
-    if (body.password !== 'Tencho2026') return json(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
-    return json(200, session());
-  }
-  if (p === '/auth/v1/user') return json(200, USER);
-  if (p === '/auth/v1/logout') return route.fulfill({ status: 204, body: '' });
-  if (p === '/auth/v1/recover') return json(200, {});
-  if (p === '/rest/v1/consents' && method === 'GET') return json(200, db.consents);
-  if (p === '/rest/v1/consents' && method === 'POST') { db.consents.push(...body); return route.fulfill({ status: 201, body: '' }); }
-  if (p === '/rest/v1/store_members') return json(200, db.store ? [{ store_id: db.store.id, stores: db.store }] : []);
-  if (p === '/rest/v1/rpc/create_store') { db.store = { id: '22222222-2222-4222-8222-222222222222', name: body.p_name, industry: body.p_industry, company_size: body.p_company_size }; return json(200, db.store.id); }
-  if (['/rest/v1/shift_types', '/rest/v1/staff', '/rest/v1/staff_private'].includes(p)) return route.fulfill({ status: 201, body: '' });
-  if (p === '/rest/v1/store_settings') return route.fulfill({ status: 204, body: '' });
-  return json(404, { msg: 'テストで用意していない通信: ' + method + ' ' + p });
-}
-const sent = (p, method) => db.requests.filter(r => r.path === p && (!method || r.method === method));
+// ---- 偽の Supabase（tests/fake-supabase.cjs）----
+const { createFake } = require('./fake-supabase.cjs');
+const fake = createFake();
+const USER = fake.user, sent = fake.sent;
+const db = { get consents() { return fake.db.consents; }, get store() { return fake.db.stores[0] || null; } };
+const handle = fake.handle;
 
 (async () => {
   console.log('テスト用のビルドを作っています…');

@@ -25,7 +25,8 @@ export async function initState(){
   me:getPref('me'),adminOK:false,showLock:false,tab:getPref('tab')||0,sv:0,av:'shift',sel:null,resDay:null,msg:'',cycle:S.plan.cycle||'m',
   curStart:iso(new Date()),page:null,updSeen:getPref('seenVersion'),returning:hasSavedStore(),
   // 店長のアカウント（Supabase を使うときだけ）
-  acct:{loading:cloudEnabled,user:null,consented:false,store:null},authStep:'login',authMsg:'',authBusy:false,captchaToken:null,authEmail:''});
+  acct:{loading:cloudEnabled,user:null,consented:false,store:null},authStep:'login',authMsg:'',authBusy:false,captchaToken:null,authEmail:'',
+  storeLoadError:'',confirmLogout:false});
  norm();
  if(!updSeen&&!returning)setPref('seenVersion',APP_VER);
 }

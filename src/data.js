@@ -44,10 +44,8 @@ export async function deleteRequest(id) { requestCache = requestList().filter(x 
 export function getPref(name) { return read(KEY.pref[name]); }
 export function setPref(name, value) { return write(KEY.pref[name], value); }
 
-/* ---------- アプリから呼ぶ口（画面はこの2つだけを使う） ---------- */
+/* ---------- アプリから呼ぶ口（画面は save() と REQ だけを使う。save() はこのファイルの下のほう） ---------- */
 
-/** 店舗データ S を保存する */
-export function save() { saveStore(S); }
 
 /** 申請の追加・更新・削除。終わったら画面を描き直す */
 export const REQ = {
@@ -186,3 +184,210 @@ export async function createStoreWithTemplate({ name, industry, companySize, wit
   }
   return { id: storeId, name, industry, company_size: companySize || null };
 }
+
+/* ===================== 店舗データの保存先：Supabase（作業4） =====================
+   ログインした店長がお店を開いている間は、店舗データ S を Supabase の表に保存する。
+   画面は今までどおり save() を呼ぶだけ。ここで S を表の行に変え、前回送った内容と比べて、
+   変わった行だけを送る（少し待ってからまとめて送るので、続けて操作しても通信は1回）。
+
+   Supabase に入れるもの：お店（業種・従業員数・締切日）、設定（期間・必要人数・繁忙加算・巡回パターン・予算・労務ルール）、
+     シフト区分、名簿、時給、1人1日のシフト・希望休・有給・メモ、公開した期間
+   まだこの端末に置くもの（後の作業で移す）：社内連絡・予約（作業6・7）、有給の繰越・調整（作業7）、プラン（作業8）
+*/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PUB_FROM = '2000-01-01';          // 「この日まで公開」を、DB では「2000-01-01〜この日」の1行で持つ
+let cloud = null;                       // { storeId, snap: 前回送った行, timer, running, again, state }
+const extrasKey = id => 'ssm7_cloud_extra_' + id;
+
+/** 画面の S の中の、まだ Supabase の形でない ID（'s0' や 't'+時刻）を UUID に付け替える */
+export function normalizeIds(S) {
+  const map = {};
+  const fresh = old => (map[old] = crypto.randomUUID());
+  S.shifts.forEach(x => { if (!UUID.test(x.id)) x.id = fresh(x.id); });
+  S.staff.forEach(x => { if (!UUID.test(x.id)) x.id = fresh(x.id); });
+  if (!Object.keys(map).length) return false;
+  const re = v => map[v] || v;
+  S.staff.forEach(st => { st.fix = Object.fromEntries(Object.entries(st.fix || {}).map(([d, v]) => [d, re(v)])); });
+  for (const k of ['grid', 'wish']) S[k] = Object.fromEntries(Object.entries(S[k] || {}).map(([sid, days]) => [re(sid), k === 'grid' ? Object.fromEntries(Object.entries(days || {}).map(([d, v]) => [d, re(v)])) : days]));
+  S.memo = Object.fromEntries(Object.entries(S.memo || {}).map(([key, v]) => { const i = key.lastIndexOf('_'); return [re(key.slice(0, i)) + key.slice(i), v]; }));
+  return true;
+}
+
+/** 画面の S を、Supabase の表の行にする */
+export function storeToRows(S, storeId) {
+  const shiftIds = new Set(S.shifts.map(x => x.id)), staffIds = new Set(S.staff.map(x => x.id));
+  const rows = {
+    store: { industry: S.industry || '', company_size: S.company || null, request_deadline: Math.min(28, Math.max(1, +S.deadline || 20)) },
+    settings: { span: S.span, need: S.need.map(n => +n || 0), bonus: { fri: +S.bonus.fri || 0, sat: +S.bonus.sat || 0, end: +S.bonus.end || 0 }, patterns: [...S.pats], budget: Math.max(0, Math.round(+S.budget || 0)), rules: { maxRun: +S.rules.maxRun || 6, interval: +S.rules.interval || 11 } },
+    shiftTypes: S.shifts.map((x, i) => ({
+      id: x.id, store_id: storeId, name: x.name, time_range: x.time || '', color: x.color || '#F1F5F9', min_staff: Math.max(0, +x.min || 0),
+      break_hours: x.brk == null || x.brk === '' ? null : +x.brk, next_day_off: !!x.ake, is_off: x.name === '休み', sort_order: i,
+    })),
+    staff: S.staff.map((x, i) => ({
+      id: x.id, store_id: storeId, name: x.name, role: x.role || '', work_mode: x.mode || '',
+      fixed_days: Object.fromEntries(Object.entries(x.fix || {}).filter(([, v]) => shiftIds.has(v))),
+      hire_date: x.hire || null, work_days: Math.min(5, Math.max(1, +x.wdays || 5)), pl_hours: +x.plHours || 8,
+      fuyo_limit: +x.fuyo || 0, is_student: !!x.student, long_term: x.longEmp !== false, sort_order: i, active: true,
+    })),
+    wages: S.staff.map(x => ({ staff_id: x.id, store_id: storeId, wage: Math.max(0, Math.round(+x.wage || 0)) })),
+    cells: [],
+    pub: S.pubUntil ? { start_date: PUB_FROM, end_date: S.pubUntil } : null,
+  };
+  const cell = {};
+  const at = (sid, d) => (cell[sid + '|' + d] ??= { store_id: storeId, staff_id: sid, work_date: d, shift_type_id: null, leave: null, wish_off: false, memo: '' });
+  Object.entries(S.grid || {}).forEach(([sid, days]) => staffIds.has(sid) && Object.entries(days || {}).forEach(([d, v]) => {
+    if (v === 'PL' || v === 'PLH') at(sid, d).leave = v === 'PL' ? 'full' : 'half'; else if (shiftIds.has(v)) at(sid, d).shift_type_id = v;
+  }));
+  Object.entries(S.wish || {}).forEach(([sid, days]) => staffIds.has(sid) && Object.entries(days || {}).forEach(([d, v]) => { if (v) at(sid, d).wish_off = true; }));
+  Object.entries(S.memo || {}).forEach(([key, v]) => { const i = key.lastIndexOf('_'), sid = key.slice(0, i); if (v && staffIds.has(sid)) at(sid, key.slice(i + 1)).memo = String(v); });
+  rows.cells = Object.values(cell).filter(c => c.shift_type_id || c.leave || c.wish_off || c.memo);
+  return rows;
+}
+
+/** Supabase の行から、画面の S を作る（base はこの端末に置いている分と初期値） */
+export function rowsToStore(r, base) {
+  const S = base;
+  S.industry = r.store.industry; S.company = r.store.company_size || ''; S.deadline = r.store.request_deadline;
+  if (r.settings) {
+    S.span = r.settings.span; S.need = [...r.settings.need]; S.bonus = { fri: 0, sat: 0, end: 0, ...r.settings.bonus };
+    S.pats = [...r.settings.patterns]; S.budget = r.settings.budget; S.rules = { maxRun: 6, interval: 11, ...r.settings.rules };
+  }
+  S.shifts = r.shiftTypes.map(x => ({ id: x.id, name: x.name, time: x.time_range, color: x.color, min: x.min_staff, brk: x.break_hours == null ? null : +x.break_hours, ake: x.next_day_off }));
+  const wage = Object.fromEntries(r.wages.map(w => [w.staff_id, w.wage]));
+  const adj = (base.plAdjById || {});
+  S.staff = r.staff.map(x => ({ id: x.id, name: x.name, role: x.role, wage: wage[x.id] ?? 0, mode: x.work_mode, fix: { ...x.fixed_days },
+    hire: x.hire_date || '', wdays: x.work_days, plAdj: adj[x.id] || 0, plHours: +x.pl_hours, fuyo: x.fuyo_limit, student: x.is_student, longEmp: x.long_term }));
+  S.grid = {}; S.wish = {}; S.memo = {};
+  r.cells.forEach(c => {
+    const v = c.leave === 'full' ? 'PL' : c.leave === 'half' ? 'PLH' : c.shift_type_id;
+    if (v) (S.grid[c.staff_id] ??= {})[c.work_date] = v;
+    if (c.wish_off) (S.wish[c.staff_id] ??= {})[c.work_date] = true;
+    if (c.memo) S.memo[c.staff_id + '_' + c.work_date] = c.memo;
+  });
+  const pub = r.pub;
+  S.pubUntil = pub ? pub.end_date : ''; S.pubAt = pub ? pub.published_at || '' : '';
+  return S;
+}
+
+/** 前回送った行と比べて、送る操作の一覧を作る（消す → 足す・直す の順。決まった順で並べる） */
+export function diffRows(prev, next) {
+  const ops = [];
+  const byKey = (list, key) => new Map((list || []).map(x => [key(x), x]));
+  const tables = [
+    ['shift_assignments', 'cells', c => c.staff_id + '|' + c.work_date, c => ({ staff_id: c.staff_id, work_date: c.work_date })],
+    ['staff_private', 'wages', w => w.staff_id, w => ({ staff_id: w.staff_id })],
+    ['staff', 'staff', s => s.id, s => ({ id: s.id })],
+    ['shift_types', 'shiftTypes', s => s.id, s => ({ id: s.id })],
+  ];
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  for (const [table, k, key, match] of tables) {             // 消すもの（シフト → 時給 → 名簿 → 区分）
+    const now = byKey(next[k], key);
+    const gone = (prev ? prev[k] : []).filter(x => !now.has(key(x)));
+    if (table === 'shift_assignments') { if (gone.length) ops.push({ table, op: 'deleteCells', rows: gone.map(match) }); }
+    else if (gone.length) ops.push({ table, op: 'delete', ids: gone.map(x => Object.values(match(x))[0]) });
+  }
+  for (const [table, k, key] of [...tables].reverse()) {      // 足す・直すもの（区分 → 名簿 → 時給 → シフト）
+    const before = byKey(prev ? prev[k] : [], key);
+    const changed = next[k].filter(x => !same(before.get(key(x)), x));
+    if (changed.length) ops.push({ table, op: 'upsert', rows: changed });
+  }
+  if (!prev || !same(prev.store, next.store)) ops.push({ table: 'stores', op: 'update', row: next.store });
+  if (!prev || !same(prev.settings, next.settings)) ops.push({ table: 'store_settings', op: 'update', row: next.settings });
+  if (!prev || !same(prev.pub, next.pub)) ops.push({ table: 'shift_publications', op: 'replace', row: next.pub });
+  return ops;
+}
+
+async function runOp(storeId, o) {
+  const need = r => { if (r.error) throw r.error; return r; };
+  if (o.op === 'upsert') {
+    for (let i = 0; i < o.rows.length; i += 500) need(await sb.from(o.table).upsert(o.rows.slice(i, i + 500)));
+  } else if (o.op === 'delete') {
+    const col = o.table === 'staff_private' ? 'staff_id' : 'id';
+    for (let i = 0; i < o.ids.length; i += 100) need(await sb.from(o.table).delete().eq('store_id', storeId).in(col, o.ids.slice(i, i + 100)));
+  } else if (o.op === 'deleteCells') {
+    const byStaff = {};
+    o.rows.forEach(c => (byStaff[c.staff_id] ??= []).push(c.work_date));
+    for (const [sid, days] of Object.entries(byStaff))
+      for (let i = 0; i < days.length; i += 100) need(await sb.from('shift_assignments').delete().eq('store_id', storeId).eq('staff_id', sid).in('work_date', days.slice(i, i + 100)));
+  } else if (o.op === 'update') {
+    need(await sb.from(o.table).update(o.row).eq(o.table === 'stores' ? 'id' : 'store_id', storeId));
+  } else if (o.op === 'replace') {
+    need(await sb.from('shift_publications').delete().eq('store_id', storeId));
+    if (o.row) need(await sb.from('shift_publications').insert({ store_id: storeId, ...o.row }));
+  }
+}
+
+async function selectAll(q) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await q().range(from, from + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) return out;
+  }
+}
+
+/** お店のデータを Supabase から読み、画面の S を作る。読み込んだあとは save() が Supabase に送る */
+export async function openCloudStore(storeId) {
+  const one = async q => { const { data, error } = await q; if (error) throw error; return data; };
+  const [store, settings, shiftTypes, staff, wages, cells, pubs] = await Promise.all([
+    one(sb.from('stores').select('id, name, industry, company_size, request_deadline').eq('id', storeId).single()),
+    one(sb.from('store_settings').select('span, need, bonus, patterns, budget, rules').eq('store_id', storeId).maybeSingle()),
+    selectAll(() => sb.from('shift_types').select('*').eq('store_id', storeId).order('sort_order')),
+    selectAll(() => sb.from('staff').select('*').eq('store_id', storeId).eq('active', true).order('sort_order')),
+    selectAll(() => sb.from('staff_private').select('staff_id, store_id, wage').eq('store_id', storeId)),
+    selectAll(() => sb.from('shift_assignments').select('store_id, staff_id, work_date, shift_type_id, leave, wish_off, memo').eq('store_id', storeId).order('work_date')),
+    one(sb.from('shift_publications').select('start_date, end_date, published_at').eq('store_id', storeId).order('end_date', { ascending: false }).limit(1)),
+  ]);
+  const extras = read(extrasKey(storeId)) || {};
+  const base = migrate({ ...def(), ...extras, grid: {}, wish: {}, memo: {} });
+  base.plAdjById = extras.plAdjById || {};
+  const S = rowsToStore({ store, settings, shiftTypes, staff, wages, cells, pub: pubs[0] || null }, base);
+  delete S.plAdjById;
+  cloud = { storeId, snap: null, timer: null, running: false, again: false, state: 'saved' };
+  cloud.snap = storeToRows(S, storeId);
+  return S;
+}
+
+/** お店を閉じる（ログアウトしたとき）。以後の save() はこの端末に保存する */
+export function closeCloudStore() { if (cloud) clearTimeout(cloud.timer); cloud = null; }
+export const cloudStoreOpen = () => !!cloud;
+export const cloudSaveState = () => (cloud ? cloud.state : 'local');
+
+function saveExtras(S) {
+  write(extrasKey(cloud.storeId), { notices: S.notices, res: S.res, plan: S.plan, apw: S.apw, consent: S.consent,
+    plAdjById: Object.fromEntries(S.staff.map(x => [x.id, +x.plAdj || 0])) });
+}
+
+async function syncNow() {
+  if (!cloud || cloud.running) { if (cloud) cloud.again = true; return; }
+  cloud.running = true; cloud.again = false; cloud.state = 'saving'; render();
+  const c = cloud;
+  try {
+    if (normalizeIds(S)) render();
+    const next = storeToRows(S, c.storeId);
+    for (const o of diffRows(c.snap, next)) {
+      await runOp(c.storeId, o);
+      if (cloud !== c) return;
+    }
+    c.snap = next; c.state = 'saved';
+  } catch (e) {
+    c.state = 'error';
+    toast('保存できませんでした：' + accountError(e) + '（画面を開き直すと、最後に保存できた状態に戻ります）');
+  } finally {
+    c.running = false;
+    if (cloud === c && c.again) syncNow(); else render();
+  }
+}
+
+/** 店舗データ S を保存する。お店を Supabase で開いているときは Supabase に、そうでなければこの端末に */
+export function save() {
+  if (!cloud) { saveStore(S); return; }
+  saveExtras(S);
+  cloud.state = 'pending';
+  clearTimeout(cloud.timer);
+  cloud.timer = setTimeout(syncNow, 600);
+}
+
+/** 送っていない変更があるか（ページを閉じる前の確認に使う） */
+export const cloudUnsaved = () => !!cloud && ['pending', 'saving', 'error'].includes(cloud.state);
