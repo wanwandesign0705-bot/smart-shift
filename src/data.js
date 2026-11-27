@@ -50,15 +50,18 @@ export function setPref(name, value) { return write(KEY.pref[name], value); }
 /** 申請の追加・更新・削除。終わったら画面を描き直す */
 export const REQ = {
   async add(r) {
+    if (cloud) return cloudReqAdd(r);
     r.id = 'q' + Date.now() + Math.random().toString(36).slice(2, 6); r.createdAt = new Date().toISOString(); if (myUid) r.uid = myUid;
     try { R = await createRequest(r); } catch (e) { toast('送信できませんでした：' + (e.message || e.code)); return false; }
     render(); return true;
   },
   async upd(id, p) {
+    if (cloud) return cloudReqUpd(id, p);
     try { R = await updateRequest(id, p); } catch (e) { toast('更新できませんでした：' + (e.message || e.code)); return false; }
     render(); return true;
   },
   async del(id) {
+    if (cloud) return cloudReqDel(id);
     try { R = await deleteRequest(id); } catch (e) { toast('削除できませんでした'); return; }
     render();
   },
@@ -207,7 +210,9 @@ export function normalizeIds(S) {
   const fresh = old => (map[old] = crypto.randomUUID());
   S.shifts.forEach(x => { if (!UUID.test(x.id)) x.id = fresh(x.id); });
   S.staff.forEach(x => { if (!UUID.test(x.id)) x.id = fresh(x.id); });
-  if (!Object.keys(map).length) return false;
+  let changed = false;
+  (S.notices || []).forEach(n => { if (!UUID.test(n.id)) { n.id = crypto.randomUUID(); changed = true; } });
+  if (!Object.keys(map).length) return changed;
   const re = v => map[v] || v;
   S.staff.forEach(st => { st.fix = Object.fromEntries(Object.entries(st.fix || {}).map(([d, v]) => [d, re(v)])); });
   for (const k of ['grid', 'wish']) S[k] = Object.fromEntries(Object.entries(S[k] || {}).map(([sid, days]) => [re(sid), k === 'grid' ? Object.fromEntries(Object.entries(days || {}).map(([d, v]) => [d, re(v)])) : days]));
@@ -234,6 +239,7 @@ export function storeToRows(S, storeId) {
     wages: S.staff.map(x => ({ staff_id: x.id, store_id: storeId, wage: Math.max(0, Math.round(+x.wage || 0)) })),
     cells: [],
     pub: S.pubUntil ? { start_date: PUB_FROM, end_date: S.pubUntil } : null,
+    notices: (S.notices || []).map(n => ({ id: n.id, store_id: storeId, title: String(n.title || '').slice(0, 200) || '（無題）', body: n.body || '' })),
   };
   const cell = {};
   const at = (sid, d) => (cell[sid + '|' + d] ??= { store_id: storeId, staff_id: sid, work_date: d, shift_type_id: null, leave: null, wish_off: false, memo: '' });
@@ -268,6 +274,7 @@ export function rowsToStore(r, base) {
   });
   const pub = r.pub;
   S.pubUntil = pub ? pub.end_date : ''; S.pubAt = pub ? pub.published_at || '' : '';
+  if (r.notices) S.notices = r.notices.map(n => ({ id: n.id, date: (n.created_at || '').slice(0, 10) || iso(new Date()), title: n.title, body: n.body }));
   return S;
 }
 
@@ -276,6 +283,7 @@ export function diffRows(prev, next) {
   const ops = [];
   const byKey = (list, key) => new Map((list || []).map(x => [key(x), x]));
   const tables = [
+    ['announcements', 'notices', n => n.id, n => ({ id: n.id })],
     ['shift_assignments', 'cells', c => c.staff_id + '|' + c.work_date, c => ({ staff_id: c.staff_id, work_date: c.work_date })],
     ['staff_private', 'wages', w => w.staff_id, w => ({ staff_id: w.staff_id })],
     ['staff', 'staff', s => s.id, s => ({ id: s.id })],
@@ -332,7 +340,7 @@ async function selectAll(q) {
 /** お店のデータを Supabase から読み、画面の S を作る。読み込んだあとは save() が Supabase に送る */
 export async function openCloudStore(storeId) {
   const one = async q => { const { data, error } = await q; if (error) throw error; return data; };
-  const [store, settings, shiftTypes, staff, wages, cells, pubs] = await Promise.all([
+  const [store, settings, shiftTypes, staff, wages, cells, pubs, notices] = await Promise.all([
     one(sb.from('stores').select('id, name, industry, company_size, request_deadline').eq('id', storeId).single()),
     one(sb.from('store_settings').select('span, need, bonus, patterns, budget, rules').eq('store_id', storeId).maybeSingle()),
     selectAll(() => sb.from('shift_types').select('*').eq('store_id', storeId).order('sort_order')),
@@ -340,11 +348,12 @@ export async function openCloudStore(storeId) {
     selectAll(() => sb.from('staff_private').select('staff_id, store_id, wage').eq('store_id', storeId)),
     selectAll(() => sb.from('shift_assignments').select('store_id, staff_id, work_date, shift_type_id, leave, wish_off, memo').eq('store_id', storeId).order('work_date')),
     one(sb.from('shift_publications').select('start_date, end_date, published_at').eq('store_id', storeId).order('end_date', { ascending: false }).limit(1)),
+    selectAll(() => sb.from('announcements').select('id, title, body, created_at').eq('store_id', storeId).order('created_at', { ascending: false })),
   ]);
   const extras = read(extrasKey(storeId)) || {};
   const base = migrate({ ...def(), ...extras, grid: {}, wish: {}, memo: {} });
   base.plAdjById = extras.plAdjById || {};
-  const S = rowsToStore({ store, settings, shiftTypes, staff, wages, cells, pub: pubs[0] || null }, base);
+  const S = rowsToStore({ store, settings, shiftTypes, staff, wages, cells, pub: pubs[0] || null, notices }, base);
   delete S.plAdjById;
   cloud = { storeId, snap: null, timer: null, running: false, again: false, state: 'saved' };
   cloud.snap = storeToRows(S, storeId);
@@ -357,7 +366,7 @@ export const cloudStoreOpen = () => !!cloud && !cloud.readOnly;
 export const cloudSaveState = () => (cloud ? cloud.state : 'local');
 
 function saveExtras(S) {
-  write(extrasKey(cloud.storeId), { notices: S.notices, res: S.res, plan: S.plan, apw: S.apw, consent: S.consent,
+  write(extrasKey(cloud.storeId), { res: S.res, plan: S.plan, apw: S.apw, consent: S.consent,
     plAdjById: Object.fromEntries(S.staff.map(x => [x.id, +x.plAdj || 0])) });
 }
 
@@ -454,17 +463,93 @@ export async function openStaffStore() {
   if (me.error) throw me.error;
   if (!me.data) return null;
   const storeId = me.data.store_id, one = async q => { const { data, error } = await q; if (error) throw error; return data; };
-  const [store, shiftTypes, staff, cells, pubs, wage] = await Promise.all([
+  const [store, shiftTypes, staff, cells, pubs, wage, notices, reads] = await Promise.all([
     one(sb.from('stores').select('id, name, industry, company_size, request_deadline').eq('id', storeId).single()),
     selectAll(() => sb.from('shift_types').select('*').eq('store_id', storeId).order('sort_order')),
     selectAll(() => sb.from('staff').select('*').eq('store_id', storeId).eq('active', true).order('sort_order')),
     selectAll(() => sb.from('shift_assignments').select('store_id, staff_id, work_date, shift_type_id, leave, wish_off, memo').eq('store_id', storeId).order('work_date')),
     one(sb.from('shift_publications').select('start_date, end_date, published_at').eq('store_id', storeId).order('end_date', { ascending: false }).limit(1)),
     one(sb.rpc('my_wage', { p_store: storeId })),
+    selectAll(() => sb.from('announcements').select('id, title, body, created_at').eq('store_id', storeId).order('created_at', { ascending: false })),
+    selectAll(() => sb.from('announcement_reads').select('announcement_id').eq('staff_id', me.data.id)),
   ]);
   const base = migrate({ ...def(), grid: {}, wish: {}, memo: {}, notices: [], res: [] });
-  const S = rowsToStore({ store, settings: null, shiftTypes, staff, wages: wage == null ? [] : [{ staff_id: me.data.id, wage }], cells, pub: pubs[0] || null }, base);
+  const S = rowsToStore({ store, settings: null, shiftTypes, staff, wages: wage == null ? [] : [{ staff_id: me.data.id, wage }], cells, pub: pubs[0] || null, notices }, base);
   // スタッフの端末では保存しない（読むだけ）。この端末の保存にもお店のデータを書かない
-  cloud = { storeId, readOnly: true, snap: null, timer: null, running: false, again: false, state: 'staff' };
-  return { S, staffId: me.data.id, storeName: store.name };
+  cloud = { storeId, readOnly: true, staffId: me.data.id, snap: null, timer: null, running: false, again: false, state: 'staff' };
+  return { S, staffId: me.data.id, storeName: store.name, readIds: reads.map(x => x.announcement_id) };
+}
+
+/* ===================== 申請と社内連絡（作業6） =====================
+   店長：お店の申請をすべて読み、承認・却下する。社内連絡を出し、既読の人数を見る。
+   スタッフ：自分の申請だけを読む。交代の募集は swap_board 関数で「日付・時間帯・相手の名前・状態」だけを読む。
+   申請の理由は、店長と本人にしか届かない（データベースが返さない）。
+*/
+const reqFromRow = r => ({ id: r.id, type: r.kind, staffId: r.staff_id, date: r.work_date, half: !!r.half_day, shiftId: r.shift_type_id,
+  reason: r.reason || '', status: r.status, takerId: r.taker_staff_id, note: r.note || '', createdAt: r.created_at, takenAt: r.taken_at, decidedAt: r.decided_at });
+
+/** 申請を読み直す。店長ならお店のすべて、スタッフなら自分の申請と交代の掲示板。{ list, names } を返す */
+export async function loadCloudRequests() {
+  if (!cloud) return { list: [], names: {} };
+  if (!cloud.readOnly) {
+    const rows = await selectAll(() => sb.from('requests').select('*').eq('store_id', cloud.storeId).order('created_at', { ascending: false }));
+    return { list: rows.map(reqFromRow), names: {} };
+  }
+  const [mine, board] = await Promise.all([
+    selectAll(() => sb.from('requests').select('*').eq('store_id', cloud.storeId).eq('staff_id', cloud.staffId).order('created_at', { ascending: false })),
+    (async () => { const { data, error } = await sb.rpc('swap_board', { p_store: cloud.storeId }); if (error) throw error; return data || []; })(),
+  ]);
+  const names = {}, list = mine.map(reqFromRow);
+  board.forEach(b => {
+    if (b.other_staff_id) names[b.other_staff_id] = b.other_name;
+    if (b.relation === 'mine') return;                                       // 自分の募集は mine に入っている（相手の名前だけ使う）
+    list.push({ id: b.request_id, type: 'swap', staffId: b.other_staff_id, date: b.work_date, shiftId: null, shiftName: b.shift_name, shiftTime: b.shift_time,
+      status: b.status, takerId: b.relation === 'taken' ? cloud.staffId : null, board: b.relation, createdAt: b.created_at, reason: '' });
+  });
+  return { list, names };
+}
+
+/** 申請を読み直して、画面に反映する */
+export async function refreshCloudRequests() {
+  if (!cloud) return;
+  try { const r = await loadCloudRequests(); R = r.list; nameHints = r.names; }
+  catch (e) { toast('申請を読み込めませんでした：' + accountError(e)); }
+  render();
+}
+
+async function cloudReqAdd(r) {
+  const row = { id: crypto.randomUUID(), store_id: cloud.storeId, staff_id: r.staffId, kind: r.type, work_date: r.date, half_day: !!r.half,
+    shift_type_id: r.shiftId || null, reason: String(r.reason || '').slice(0, 500), status: r.status };
+  const { error } = await sb.from('requests').insert(row);
+  if (error) { toast('送信できませんでした：' + accountError(error)); return false; }
+  await refreshCloudRequests(); return true;
+}
+async function cloudReqUpd(id, p) {
+  let res;
+  if ('takerId' in p) res = await sb.rpc('take_swap', { p_request: id });                       // 交代を引き受ける
+  else {
+    const patch = { status: p.status }; if (p.note !== undefined) patch.note = String(p.note).slice(0, 500);
+    res = await sb.from('requests').update(patch).eq('id', id).eq('store_id', cloud.storeId);
+  }
+  if (res.error) { toast('更新できませんでした：' + accountError(res.error)); await refreshCloudRequests(); return false; }
+  await refreshCloudRequests(); return true;
+}
+async function cloudReqDel(id) {
+  const { error } = await sb.from('requests').delete().eq('id', id).eq('store_id', cloud.storeId);
+  if (error) toast('削除できませんでした：' + accountError(error));
+  await refreshCloudRequests();
+}
+
+/** スタッフが社内連絡を読んだことを記録する（同じものは1回だけ） */
+export async function markNoticesRead(ids) {
+  if (!cloud || !cloud.readOnly || !ids.length) return;
+  const rows = ids.map(id => ({ announcement_id: id, staff_id: cloud.staffId, store_id: cloud.storeId }));
+  const { error } = await sb.from('announcement_reads').upsert(rows, { onConflict: 'announcement_id,staff_id', ignoreDuplicates: true });
+  if (error) throw error;
+}
+/** 店長が見る、社内連絡ごとの既読の人数 */
+export async function loadNoticeReadCounts() {
+  if (!cloud || cloud.readOnly) return {};
+  const rows = await selectAll(() => sb.from('announcement_reads').select('announcement_id').eq('store_id', cloud.storeId));
+  const out = {}; rows.forEach(x => { out[x.announcement_id] = (out[x.announcement_id] || 0) + 1; }); return out;
 }

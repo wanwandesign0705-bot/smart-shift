@@ -6,7 +6,7 @@
 const PK = {
   stores: ['id'], store_members: ['store_id', 'user_id'], store_settings: ['store_id'], shift_types: ['id'], staff: ['id'],
   staff_private: ['staff_id'], shift_assignments: ['staff_id', 'work_date'], shift_publications: ['id'], consents: ['id'],
-  staff_invites: ['id'],
+  staff_invites: ['id'], requests: ['id'], announcements: ['id'], announcement_reads: ['announcement_id', 'staff_id'],
 };
 
 function fakeJwt(sub, anon = false) {
@@ -34,6 +34,8 @@ function createFake({ password = 'Tencho2026' } = {}) {
     const mine = rows.filter(r => (r.store_id || (t === 'stores' ? r.id : null)) === me.store_id);
     if (['staff_private', 'store_settings', 'staff_invites', 'store_members'].includes(t)) return [];
     if (t === 'staff') return mine.filter(s => s.id === me.id);              // 名簿は自分の1行だけ（003）
+    if (t === 'requests') return mine.filter(x => x.staff_id === me.id);     // 申請は自分の分だけ（004）
+    if (t === 'announcement_reads') return mine.filter(x => x.staff_id === me.id);
     if (t === 'shift_assignments') {                                         // シフトは自分の公開済みの分だけ（003）
       const pubs = db.shift_publications.filter(p => p.store_id === me.store_id);
       return mine.filter(c => c.staff_id === me.id && pubs.some(p => c.work_date >= p.start_date && c.work_date <= p.end_date));
@@ -108,6 +110,27 @@ function createFake({ password = 'Tencho2026' } = {}) {
       inv.used_at = new Date().toISOString();
       return json(200, inv.staff_id);
     }
+    if (p === '/rest/v1/rpc/take_swap') {
+      const me = db.staff.find(x => x.user_id === caller), q = db.requests.find(x => x.id === body.p_request);
+      if (!me || !q) return json(400, { code: '42501', message: 'not_allowed: この店のスタッフではありません' });
+      if (q.kind !== 'swap' || q.status !== 'open') return json(400, { code: 'P0001', message: 'not_open: この交代はもう募集していません' });
+      if (q.staff_id === me.id) return json(400, { code: 'P0001', message: 'not_allowed: 自分の交代募集は引き受けられません' });
+      q.taker_staff_id = me.id; q.status = 'pending'; q.taken_at = new Date().toISOString();
+      return json(200, null);
+    }
+    if (p === '/rest/v1/rpc/swap_board') {                    // 本物の swap_board と同じ形（理由は返さない）
+      const me = db.staff.find(x => x.user_id === caller && x.store_id === body.p_store);
+      if (!me) return json(200, []);
+      const today = new Date().toISOString().slice(0, 10), nm = id => (db.staff.find(x => x.id === id) || {}).name || null;
+      const rows = db.requests.filter(q => q.store_id === body.p_store && q.kind === 'swap' &&
+        ((q.status === 'open' && q.staff_id !== me.id && q.work_date >= today) || q.taker_staff_id === me.id || q.staff_id === me.id));
+      return json(200, rows.map(q => {
+        const t = db.shift_types.find(x => x.id === q.shift_type_id) || {}, mineQ = q.staff_id === me.id;
+        return { request_id: q.id, relation: mineQ ? 'mine' : q.taker_staff_id === me.id ? 'taken' : 'open', work_date: q.work_date,
+          shift_name: t.name || null, shift_time: t.time_range || null, status: q.status,
+          other_staff_id: mineQ ? q.taker_staff_id : q.staff_id, other_name: mineQ ? nm(q.taker_staff_id) : nm(q.staff_id), created_at: q.created_at };
+      }));
+    }
     if (p === '/rest/v1/rpc/my_wage') {
       const me = db.staff.find(s => s.user_id === caller && s.store_id === body.p_store);
       const w = me && db.staff_private.find(x => x.staff_id === me.id);
@@ -140,13 +163,16 @@ function createFake({ password = 'Tencho2026' } = {}) {
     }
     if (method === 'POST') {
       const list = Array.isArray(body) ? body : [body];
-      const upsert = (h['prefer'] || '').includes('resolution=merge-duplicates');
+      const upsert = (h['prefer'] || '').includes('resolution=merge-duplicates'), ignore = (h['prefer'] || '').includes('resolution=ignore-duplicates');
       for (const r0 of list) {
         const r = { ...r0 };
         if (t === 'shift_publications' && !r.id) { r.id = 'pub' + seq++; r.published_at = r.published_at || new Date().toISOString(); }
         if (t === 'consents' && !r.id) r.id = seq++;
         if (t === 'staff' && r.active === undefined) r.active = true;   // 本物の DB の初期値（default true）と同じ
+        if ((t === 'requests' || t === 'announcements') && !r.created_at) r.created_at = new Date(Date.now() + seq++).toISOString();
+        if (t === 'requests') { r.taker_staff_id = r.taker_staff_id ?? null; r.note = r.note ?? ''; }
         const i = db[t].findIndex(x => key(t, x) === key(t, r));
+        if (i >= 0 && ignore) continue;
         if (i >= 0) { if (!upsert) return json(409, { code: '23505', message: 'duplicate key value violates unique constraint' }); db[t][i] = { ...db[t][i], ...r }; }
         else db[t].push(r);
       }

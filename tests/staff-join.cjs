@@ -87,7 +87,7 @@ function ok(name, cond, detail = '') {
     await staff.click('button[aria-label="次の期間"]'); await wait(staff);
     ok('公開していない来月は「まだ公開されていません」', (await text(staff)).includes('まだ公開されていません'));
     await staff.click('button:has-text("申請")'); await wait(staff);
-    ok('申請は、作業6まで「まもなく使えるようになります」と知らせる', (await text(staff)).includes('まもなく'));
+    ok('申請の画面が使える（作業6から）', (await text(staff)).includes('申請する') && !(await text(staff)).includes('まもなく'));
     await staff.reload(); await wait(staff, 2500);
     ok('開き直しても、スタッフとして参加したまま', (await staff.textContent('#hd')).includes('スタッフとして参加中') && (await staff.evaluate(() => me)) === yamada);
 

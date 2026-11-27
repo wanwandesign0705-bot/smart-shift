@@ -190,6 +190,8 @@ select test.fails('スタッフは社内連絡を出せない',
 insert into public.announcement_reads (announcement_id, staff_id, store_id)
   select a.id, public.my_staff_id(a.store_id), a.store_id from public.announcements a;
 select test.ok('スタッフは社内連絡を既読にできる', test.n('select * from public.announcement_reads') = 1);
+select test.fails('スタッフは、ほかの人の既読を付けられない',
+  $$insert into public.announcement_reads (announcement_id, staff_id, store_id) select a.id, (select id from public.staff where name = '田中'), a.store_id from public.announcements a$$, 'row-level security');
 
 \echo
 \echo '== 7. 申請：出せるが、自分で承認にはできない =='
@@ -213,18 +215,39 @@ insert into public.requests (store_id, staff_id, kind, work_date, status, shift_
   values (current_setting('test.store_a')::uuid, public.my_staff_id(current_setting('test.store_a')::uuid), 'swap', '2026-11-20', 'open',
           (select id from public.shift_types where name = '日勤'));
 select set_config('test.swap', (select id::text from public.requests where kind = 'swap'), false);
+-- 来月の交代募集も出す（掲示板には、今日以降の募集だけが出る）
+insert into public.requests (store_id, staff_id, kind, work_date, status, shift_type_id, reason)
+  values (current_setting('test.store_a')::uuid, public.my_staff_id(current_setting('test.store_a')::uuid), 'swap', current_date + 20, 'open',
+          (select id from public.shift_types where name = '日勤'), '家族の用事');
 select test.fails('自分の交代募集は引き受けられない', $$select public.take_swap(current_setting('test.swap')::uuid)$$, 'not_allowed');
 select test.login('c0000000-0000-0000-0000-000000000002');
+select test.ok('ほかのスタッフは、申請の表から交代募集を読めない（理由を見せない）', test.n($$select * from public.requests where kind = 'swap'$$) = 0);
+select test.ok('掲示板（swap_board）には、募集中の交代が「日付・時間帯・募集した人の名前」で出る',
+  (select count(*) = 1 and bool_and(relation = 'open' and other_name = '山田' and shift_name = '日勤' and shift_time = '09:00-18:00')
+     from public.swap_board(current_setting('test.store_a')::uuid)));
+select test.ok('掲示板は、申請の理由を返さない',
+  not exists (select 1 from pg_proc where proname = 'swap_board' and 'reason' = any (proargnames)));
 select test.fails('その日に出勤予定の人は引き受けられない', $$select public.take_swap(current_setting('test.swap')::uuid)$$, 'busy');
 reset role;
 update public.shift_assignments set shift_type_id = (select id from public.shift_types where name = '休み')
   where staff_id = (select id from public.staff where name = '伊藤') and work_date = '2026-11-20';
 set role authenticated;
 select public.take_swap(current_setting('test.swap')::uuid);
-select test.ok('別のスタッフが引き受けると承認待ちになる',
-  (select status = 'pending' and taker_staff_id = (select id from public.staff where name = '伊藤') from public.requests where id = current_setting('test.swap')::uuid));
-select test.fails('引き受けた人も、自分で承認にはできない',
-  $$update public.requests set status = 'approved' where id = current_setting('test.swap')::uuid$$, 'not_allowed');
+select test.ok('別のスタッフが引き受けると、掲示板に「自分が引き受けた交代（承認待ち）」として出る',
+  (select count(*) = 1 from public.swap_board(current_setting('test.store_a')::uuid)
+    where relation = 'taken' and request_id = current_setting('test.swap')::uuid and status = 'pending' and other_name = '山田'));
+select test.login('c0000000-0000-0000-0000-000000000001');
+select test.ok('募集した本人には、引き受けた人の名前が出る',
+  (select count(*) = 1 from public.swap_board(current_setting('test.store_a')::uuid)
+    where relation = 'mine' and request_id = current_setting('test.swap')::uuid and other_name = '伊藤')
+  and (select status = 'pending' from public.requests where id = current_setting('test.swap')::uuid));
+select test.login('c0000000-0000-0000-0000-000000000002');
+-- 引き受けた人には相手の申請の行が見えないので、書き換えようとしても0件で終わる（エラーにはならない）
+update public.requests set status = 'approved' where id = current_setting('test.swap')::uuid;
+reset role;
+select test.ok('引き受けた人も、自分で承認にはできない（承認待ちのまま）',
+  (select status = 'pending' from public.requests where id = current_setting('test.swap')::uuid));
+set role authenticated;
 select test.login('b0000000-0000-0000-0000-000000000001');
 select test.ok('他店の店長は店Aの申請を読めない', test.n('select * from public.requests') = 0);
 select test.login('a0000000-0000-0000-0000-000000000001');
@@ -241,7 +264,8 @@ set role authenticated;
 select test.login('c0000000-0000-0000-0000-000000000002');
 select test.ok('スタッフは、ほかの人の申請（理由を含む）を読めない',
   test.n($$select * from public.requests where reason = '通院のため'$$) = 0);
-select test.ok('スタッフは、自分が引き受けた交代は読める', test.n($$select * from public.requests where kind = 'swap'$$) = 1);
+select test.ok('引き受けた人も、申請の表からは相手の申請（理由）を読めない', test.n($$select * from public.requests where kind = 'swap'$$) = 0);
+select test.ok('ほかのお店の人やログイン前の人には、掲示板は空', (select count(*) = 0 from public.swap_board(current_setting('test.store_b')::uuid)));
 
 \echo
 \echo '== 9. 実効プランは日付で決まる =='

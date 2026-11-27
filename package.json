@@ -12,7 +12,8 @@
     "test:account": "node tests/account-flow.cjs",
     "test:schema": "bash tests/run-schema-test.sh",
     "test:cloud": "node tests/cloud-store.cjs",
-    "test:staff": "node tests/staff-join.cjs"
+    "test:staff": "node tests/staff-join.cjs",
+    "test:requests": "node tests/requests-flow.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

@@ -28,7 +28,9 @@ export async function initState(){
   acct:{loading:cloudEnabled,user:null,consented:false,store:null},authStep:'login',authMsg:'',authBusy:false,captchaToken:null,authEmail:'',
   storeLoadError:'',confirmLogout:false,
   // スタッフの参加（作業5）
-  inviteStatus:null,inviteToken:null,staffCtx:null});
+  inviteStatus:null,inviteToken:null,staffCtx:null,
+  // 申請と社内連絡（作業6）：スタッフの端末で、ほかの人の名前（交代の相手）と、読んだ社内連絡
+  nameHints:{},staffReads:null,noticeReads:null});
  norm();
  if(!updSeen&&!returning)setPref('seenVersion',APP_VER);
 }

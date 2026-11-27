@@ -33,7 +33,7 @@ export async function refreshAccount() {
 /** お店のデータを Supabase から読み込み、画面に出す（作業4） */
 export async function loadCloudStoreIntoApp() {
   storeLoadError = '';
-  try { S = await openCloudStore(acct.store.id); mode = 'db'; cfgReady = true; sel = null; norm(); }
+  try { S = await openCloudStore(acct.store.id); mode = 'db'; cfgReady = true; sel = null; norm(); noticeReads = null; await refreshCloudRequests(); }
   catch (e) { storeLoadError = accountError(e); }
 }
 export async function retryStoreLoad() { await loadCloudStoreIntoApp(); render(); }
@@ -47,6 +47,7 @@ export async function logout() {
   closeCloudStore();
   // この端末に、お店のデータ（時給など）を残さない。画面はこの端末の保存に戻す
   const local = loadStore(); S = local ? migrate(local) : def(); mode = 'local';
+  R = await loadRequests(); nameHints = {}; noticeReads = null;
   acct = { user: null, consented: false, store: null, loading: false };
   adminOK = false; showLock = false; authStep = 'login'; sel = null;
   toast('ログアウトしました'); render(true);

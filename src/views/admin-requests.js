@@ -3,10 +3,10 @@
 /* ===================== 管理者：申請・承認 ===================== */
 export const RT={pl:'有給休暇',off:'希望休',swap:'シフト交代'};
 export const RS={pending:['承認待ち','warn'],open:['交代相手を募集中','a'],approved:['承認済み','ok'],rejected:['却下','bad'],canceled:['取り消し','']};
-export const stName=id=>(S.staff.find(s=>s.id===id)||{}).name||'（削除されたスタッフ）';
+export const stName=id=>(S.staff.find(s=>s.id===id)||{}).name||nameHints[id]||'（削除されたスタッフ）';
 export function reqDetail(r){let t=`<b>${esc(stName(r.staffId))}</b>　${fmtD(r.date)}`;
  if(r.type==='pl')t+=r.half?'　半日':'　全日';
- if(r.type==='swap'){const s=sh(r.shiftId);t+=`　${esc(s?s.name:'')}${r.takerId?` → <b>${esc(stName(r.takerId))}</b> が引き受け`:''}`}
+ if(r.type==='swap'){const s=sh(r.shiftId);t+=`　${esc(s?s.name:(r.shiftName||''))}${r.takerId?` → <b>${esc(stName(r.takerId))}</b> が引き受け`:''}`}
  return t}
 export function impact(r){if(r.type==='swap')return'';const cur=gvd(r.staffId,r.date);if(!isWork(cur))return'<span class="chip">この日は勤務なし</span>';const k=workingOn(r.date)-1,n=needOn(r.date);return`<span class="chip ${k<n?'bad':'ok'}">承認後の出勤 ${k}/${n}名</span>`}
 export async function approve(id){const r=R.find(x=>x.id===id);if(!r)return;const G=S.grid;

@@ -44,7 +44,7 @@ export function tabStaff(){
  if(cloudEnabled&&acct.user&&acct.user.is_anonymous&&staffCtx&&(staffCtx.unlinked||staffCtx.error))return`<div class="card" style="max-width:560px;margin:0 auto"><h2>${staffCtx.error?'お店のデータを読み込めませんでした':'この端末の参加は解除されています'}</h2><p class="small" style="margin-top:6px">${staffCtx.error?esc(staffCtx.error):'店長が参加を解除したか、招待リンクを再発行して別の端末で参加しました。この端末で見るには、店長に招待リンクを送ってもらってください。'}</p></div>`;
  const st=S.staff.find(s=>s.id===me);
  const T=['マイシフト','全体のシフト','申請','社内連絡'],pendMine=R.filter(r=>r.staffId===me&&['pending','open'].includes(r.status)).length;
- const tabs=`<div class="row between" style="margin-bottom:14px"><div class="seg">${T.map((n,i)=>staffMode()&&i===1?'':`<button class="${sv===i?'b':'b2'}" onclick="sv=${i};render()">${n}${i===2&&pendMine?` <span class="dot">${pendMine}</span>`:''}</button>`).join('')}</div>${st&&!staffMode()?mePicker():''}</div>`;
+ const tabs=`<div class="row between" style="margin-bottom:14px"><div class="seg">${T.map((n,i)=>staffMode()&&i===1?'':`<button class="${sv===i?'b':'b2'}" onclick="sv=${i};render()">${n}${i===2&&pendMine?` <span class="dot">${pendMine}</span>`:''}${i===3&&unreadNotices()?` <span class="dot">${unreadNotices()}</span>`:''}</button>`).join('')}</div>${st&&!staffMode()?mePicker():''}</div>`;
  if(!st&&sv!==1&&sv!==3)return tabs+mePicker(true);
  let body='';
  if(sv===0){const m=myStats(st),D=dim();let r='';for(let d=1;d<=D;d++){if(!isPub(d))continue;const id=gv(st,d);if(!isWork(id)&&!isPL(id))continue;const x=sh(id),mm=S.memo[st.id+'_'+dk(d)];r+=`<tr><td class="bold">${mon(d)}/${dom(d)}（${isHol(d)?'祝':WD[dow(d)]}）</td><td><span style="background:${esc(x.color)};color:var(--cell-fg);padding:2px 8px;border-radius:6px;font-weight:600">${esc(x.name)}</span></td><td>${esc(x.time||'')}</td><td class="small">${esc(mm||'')}</td></tr>`}
@@ -53,6 +53,16 @@ export function tabStaff(){
   <div class="tiles"><div class="tile"><div class="k">出勤日数</div><div class="v">${m.days}日</div></div><div class="tile"><div class="k">予定労働時間</div><div class="v">${m.h.toFixed(1)}h</div></div><div class="tile"><div class="k">給与見込（深夜割増込）</div><div class="v">${yen(m.pay)}</div><div class="xs muted">時給 ${yen(st.wage)}・交通費等は含みません</div></div>${staffMode()&&can('pl')?(()=>{const p=plInfo(st);return`<div class="tile"><div class="k">有給の残り</div><div class="v">${p.remain}日</div><div class="xs muted">${p.base?'付与 '+p.grant+'日（基準日 '+fmtY(p.base)+'）':'初回付与 '+fmtY(p.first)}</div></div>`})():''}</div><p class="xs muted" style="margin:-8px 0 14px">${NOTE}</p>
   <div class="card"><div class="tw"><table class="t"><tr><th>日付</th><th>区分</th><th>時間帯</th><th>メモ</th></tr>${r||'<tr><td colspan="4" class="empty">公開済みのシフトはありません</td></tr>'}</table></div></div>`}
  else if(sv===1&&!staffMode())body=`<div class="card tight">${navBar()}</div><div class="card sc">${grid(0)}</div>${legend()}`;
- else if(sv===2)body=staffMode()?`<div class="card"><h2>申請</h2><p class="small muted">有給・希望休・シフト交代の申請は、まもなくこの画面から出せるようになります。それまでは、店長に直接伝えてください。</p></div>`:staffReqTab(st);
- else body=`<div class="card"><h2>社内連絡</h2><p class="small muted" style="margin:-6px 0 8px">店長・管理者からの連絡です。</p>${noticeList(0)}</div>`;
+ else if(sv===2)body=staffReqTab(st)+(staffMode()?takenSwapsCard():'');
+ else{if(staffMode())setTimeout(markShownNoticesRead,300);body=`<div class="card"><h2>社内連絡</h2><p class="small muted" style="margin:-6px 0 8px">店長・管理者からの連絡です。</p>${noticeList(0)}</div>`}
  return tabs+body}
+
+/* 作業6：スタッフの端末の社内連絡（既読）と、引き受けた交代 */
+export const unreadNotices=()=>staffMode()&&staffReads?S.notices.filter(n=>!staffReads.has(n.id)).length:0;
+export async function markShownNoticesRead(){
+ if(!staffMode()||!staffReads||sv!==3)return;
+ const ids=S.notices.filter(n=>!staffReads.has(n.id)).map(n=>n.id);if(!ids.length)return;
+ try{await markNoticesRead(ids);ids.forEach(id=>staffReads.add(id));render()}catch(e){}
+}
+export function takenSwapsCard(){const t=R.filter(r=>r.board==='taken');if(!t.length)return'';
+ return`<div class="card"><h2>引き受けた交代</h2><div class="list">${t.map(r=>`<div class="li"><div class="body"><div class="row" style="margin-bottom:4px"><span class="chip a">シフト交代</span><span class="chip ${RS[r.status][1]}">${RS[r.status][0]}</span></div>${reqDetail({...r,takerId:null})}<div class="xs muted">${esc(r.shiftTime||'')}</div></div></div>`).join('')}</div></div>`}

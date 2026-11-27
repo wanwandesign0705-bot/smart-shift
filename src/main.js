@@ -49,6 +49,10 @@ initState().then(() => {
   render();
   if (returning && isNewUpd()) whatsNew();
   if (cloudEnabled) {
+    // 申請と社内連絡は、1分ごとと、画面に戻ってきたときに読み直す（作業6）
+    const poll = () => { if (document.visibilityState === 'visible' && (cloudStoreOpen() || staffMode())) refreshCloudRequests(); };
+    setInterval(poll, 60000);
+    document.addEventListener('visibilitychange', poll);
     // 招待リンク（#invite=…）を開いたときは、参加の画面を出す
     inviteToken = inviteTokenFromUrl();
     if (inviteToken) { page = 'invite'; render(); }

@@ -115,5 +115,7 @@ export async function loadStaffIntoApp() {
     // 匿名ログインはしているが、名簿に結びついていない（参加を解除された・再発行で別の端末に移った）
     if (!r) { staffCtx = { unlinked: true }; return; }
     S = r.S; me = r.staffId; staffCtx = { storeName: r.storeName }; mode = 'db'; norm();
+    staffReads = new Set(r.readIds);
+    await refreshCloudRequests();
   } catch (e) { staffCtx = { error: accountError(e) }; }
 }

@@ -20,6 +20,7 @@ npm run build    # 公開用のファイルを dist/ に作る
 npm run test:account   # 店長の登録・ログイン・お店の作成の流れ（Supabase への通信はテストが受け取る）
 npm run test:cloud     # 管理画面のデータが Supabase に保存され、開き直しても残るか（作業4）
 npm run test:staff     # 招待リンクでスタッフが参加できるか（作業5）
+npm run test:requests  # 申請・承認・交代・社内連絡（作業6）
 npm run test:schema    # schema.sql の守り（PostgreSQL 16 が必要）
 ```
 
