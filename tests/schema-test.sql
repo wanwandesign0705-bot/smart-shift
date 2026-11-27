@@ -152,7 +152,8 @@ select test.fails('他店の店長は、店Aのスタッフの招待リンクを
 select test.login('c0000000-0000-0000-0000-000000000001');
 select test.ok('招待前の匿名の人は店Aの名簿を読めない', test.n('select * from public.staff') = 0);
 select public.redeem_invite(current_setting('test.tok1'));
-select test.ok('招待リンクを開くとスタッフに結びつく', test.n('select * from public.staff') = 3);
+select test.ok('招待リンクを開くとスタッフに結びつき、名簿は自分の1行だけ読める', test.n('select * from public.staff') = 1
+  and (select name from public.staff) = '山田');
 select test.login('c0000000-0000-0000-0000-000000000009');
 select test.fails('同じリンクは2回使えない', $$select public.redeem_invite(current_setting('test.tok1'))$$, 'invalid_invite');
 select test.fails('でたらめなトークンは使えない', $$select public.redeem_invite('0000')$$, 'invalid_invite');
@@ -166,10 +167,13 @@ select test.ok('スタッフは時給を読めない', test.n('select * from pub
 select test.ok('スタッフは契約を読めない', test.n('select * from public.subscriptions') = 0);
 select test.ok('スタッフは店の設定（予算）を読めない', test.n('select * from public.store_settings') = 0);
 select test.ok('スタッフは招待リンクを読めない', test.n('select * from public.staff_invites') = 0);
-select test.ok('スタッフは公開済みの11月のシフトを読める', test.n($$select * from public.shift_assignments where work_date between '2026-11-01' and '2026-11-30'$$) = 90);
+select test.ok('スタッフは、自分の公開済みの11月のシフトだけ読める（30日分）',
+  test.n($$select * from public.shift_assignments where work_date between '2026-11-01' and '2026-11-30'$$) = 30
+  and test.n($$select * from public.shift_assignments where staff_id <> public.my_staff_id(store_id)$$) = 0);
+select test.ok('スタッフは、ほかの人の名簿（入社日・扶養・学生など）を読めない', test.n($$select * from public.staff where name <> '山田'$$) = 0);
 select test.ok('スタッフは未公開の12月のシフトを読めない', test.n($$select * from public.shift_assignments where work_date >= '2026-12-01'$$) = 0);
 select test.ok('スタッフは自分の有給付与だけ読める', test.n('select * from public.paid_leave_grants') = 1);
-select test.ok('スタッフは他店の店舗・名簿を読めない', test.n('select * from public.stores') = 1 and test.n($$select * from public.staff where store_id = current_setting('test.store_b')::uuid$$) = 0);
+select test.ok('スタッフは他店の店舗を読めない', test.n('select * from public.stores') = 1);
 select test.ok('スタッフは自店の実効プランを知れる（機能の出し分け用）', public.effective_plan(current_setting('test.store_a')::uuid) = 'pro');
 select test.ok('スタッフは決済リンクを読めない', test.n('select * from public.app_config') = 0);
 select test.ok('スタッフは自分の時給だけを関数で知れる（給与見込用）', public.my_wage(current_setting('test.store_a')::uuid) = 1180);
@@ -228,6 +232,16 @@ update public.requests set status = 'approved' where id = current_setting('test.
 select test.ok('店長は承認でき、承認した人と日時が残る',
   (select status = 'approved' and decided_by = 'a0000000-0000-0000-0000-000000000001' and decided_at is not null
    from public.requests where id = current_setting('test.swap')::uuid));
+
+reset role;
+select set_config('request.jwt.claims', '', false);
+insert into public.requests (store_id, staff_id, kind, work_date, status, reason)
+  select store_id, id, 'off', '2026-12-24', 'pending', '通院のため' from public.staff where name = '田中';
+set role authenticated;
+select test.login('c0000000-0000-0000-0000-000000000002');
+select test.ok('スタッフは、ほかの人の申請（理由を含む）を読めない',
+  test.n($$select * from public.requests where reason = '通院のため'$$) = 0);
+select test.ok('スタッフは、自分が引き受けた交代は読める', test.n($$select * from public.requests where kind = 'swap'$$) = 1);
 
 \echo
 \echo '== 9. 実効プランは日付で決まる =='

@@ -79,7 +79,9 @@ function ok(name, cond, detail = '') {
     ok('マイシフトに、自分のシフトと給与見込が出る（時給 ¥1,100）', my.includes('給与見込') && my.includes('時給 ¥1,100') && my.includes('出勤日数'));
     ok('マイシフトに、有給の残りも出る', my.includes('有給の残り'));
     await staff.screenshot({ path: path.join(shotDir, '03-my-shift.png'), fullPage: true });
-    ok('ほかの人の時給は、この端末には来ない', await staff.evaluate(id => S.staff.filter(s => s.id !== id).every(s => s.wage === 0), yamada));
+    ok('ほかの人の名簿・時給は、この端末に来ない（自分の1行だけ）', await staff.evaluate(id => S.staff.length === 1 && S.staff[0].id === id, yamada));
+    ok('ほかの人のシフトも来ない', await staff.evaluate(id => Object.keys(S.grid).every(k => k === id), yamada));
+    ok('「全体のシフト」のタブは出ない', !(await staff.$('button:has-text("全体のシフト")')));
     // このお店にしかないスタッフの ID で探す（この端末のサンプルデータにも同じ名前・時給の人がいるため）
     ok('この端末の保存には、お店のデータを書かない', await staff.evaluate(ids => Object.keys(localStorage).every(k => k.startsWith('sb-') || !ids.some(id => (localStorage.getItem(k) || '').includes(id))), db.staff.map(s => s.id)));
     await staff.click('button[aria-label="次の期間"]'); await wait(staff);
@@ -88,6 +90,17 @@ function ok(name, cond, detail = '') {
     ok('申請は、作業6まで「まもなく使えるようになります」と知らせる', (await text(staff)).includes('まもなく'));
     await staff.reload(); await wait(staff, 2500);
     ok('開き直しても、スタッフとして参加したまま', (await staff.textContent('#hd')).includes('スタッフとして参加中') && (await staff.evaluate(() => me)) === yamada);
+
+    console.log('\n== 参加していない人・店長がロックした端末 ==');
+    const visitor = await device('参加していない人', { width: 390, height: 844 });
+    await visitor.goto(`http://localhost:${PORT}/`); await wait(visitor, 1500);
+    ok('参加していない人には、招待リンクの案内だけが出る（名前を選ぶ欄・給与見込は出ない）',
+      (await text(visitor)).includes('招待リンク（または QR コード）を開いてください') && !(await visitor.$('#f_me')) && !(await text(visitor)).includes('給与見込（深夜割増込）'));
+    await owner.click('text=ロックしてスタッフ画面へ'); await wait(owner, 500);
+    ok('店長がロックした端末にも、案内だけが出る（ほかの人の給与見込を見られない）',
+      (await text(owner)).includes('招待リンク（または QR コード）を開いてください') && !(await owner.$('#f_me')) && !(await text(owner)).includes('給与見込（深夜割増込）'));
+    await owner.click('text=管理者メニュー'); await wait(owner, 800);
+    await owner.evaluate(() => go(5)); await wait(owner, 800);
 
     console.log('\n== 同じリンクは2回使えない ==');
     const other = await device('別の人');

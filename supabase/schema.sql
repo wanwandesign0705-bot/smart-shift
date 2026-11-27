@@ -611,7 +611,8 @@ create policy invites_admin_delete on public.staff_invites for delete to authent
 create policy shift_types_read  on public.shift_types for select to authenticated using (public.is_store_user(store_id));
 create policy shift_types_write on public.shift_types for all to authenticated
   using (public.is_store_admin(store_id)) with check (public.is_store_admin(store_id));
-create policy staff_read  on public.staff for select to authenticated using (public.is_store_user(store_id));
+-- 名簿：店長は staff_write で全部。スタッフは自分の1行だけ（ほかの人の入社日・扶養などは見せない）
+create policy staff_read_self on public.staff for select to authenticated using (user_id = auth.uid());
 create policy staff_write on public.staff for all to authenticated
   using (public.is_store_admin(store_id)) with check (public.is_store_admin(store_id));
 create policy publications_read  on public.shift_publications for select to authenticated using (public.is_store_user(store_id));
@@ -624,14 +625,18 @@ create policy announcements_read  on public.announcements for select to authenti
 create policy announcements_write on public.announcements for all to authenticated
   using (public.is_store_admin(store_id)) with check (public.is_store_admin(store_id));
 
--- シフト：スタッフは公開済みの期間だけ読める
+-- シフト：スタッフは、自分の分で、公開済みの期間だけ読める
 create policy assignments_admin on public.shift_assignments for all to authenticated
   using (public.is_store_admin(store_id)) with check (public.is_store_admin(store_id));
 create policy assignments_staff_read on public.shift_assignments for select to authenticated
-  using (public.my_staff_id(store_id) is not null and public.is_published(store_id, work_date));
+  using (staff_id = public.my_staff_id(store_id) and public.is_published(store_id, work_date));
 
--- 申請：同じ店の人は読める（交代募集を見るため）。細かい制限は guard_requests トリガー
-create policy requests_read on public.requests for select to authenticated using (public.is_store_user(store_id));
+-- 申請：店長は全部。スタッフは自分のもの・自分が引き受けたもの・交代の募集中のものだけ。書き込みの制限は guard_requests トリガー
+create policy requests_read on public.requests for select to authenticated
+  using (public.is_store_admin(store_id)
+         or staff_id = public.my_staff_id(store_id)
+         or taker_staff_id = public.my_staff_id(store_id)
+         or (kind = 'swap' and status = 'open' and public.my_staff_id(store_id) is not null));
 create policy requests_insert on public.requests for insert to authenticated with check (public.is_store_user(store_id));
 create policy requests_update on public.requests for update to authenticated
   using (public.is_store_user(store_id)) with check (public.is_store_user(store_id));

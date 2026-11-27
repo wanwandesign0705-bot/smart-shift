@@ -33,9 +33,10 @@ function createFake({ password = 'Tencho2026' } = {}) {
     if (!me) return [];
     const mine = rows.filter(r => (r.store_id || (t === 'stores' ? r.id : null)) === me.store_id);
     if (['staff_private', 'store_settings', 'staff_invites', 'store_members'].includes(t)) return [];
-    if (t === 'shift_assignments') {
+    if (t === 'staff') return mine.filter(s => s.id === me.id);              // 名簿は自分の1行だけ（003）
+    if (t === 'shift_assignments') {                                         // シフトは自分の公開済みの分だけ（003）
       const pubs = db.shift_publications.filter(p => p.store_id === me.store_id);
-      return mine.filter(c => pubs.some(p => c.work_date >= p.start_date && c.work_date <= p.end_date));
+      return mine.filter(c => c.staff_id === me.id && pubs.some(p => c.work_date >= p.start_date && c.work_date <= p.end_date));
     }
     return mine;
   }
