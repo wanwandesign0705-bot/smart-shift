@@ -26,9 +26,10 @@ import * as staff from './views/staff.js';
 import * as infoPages from './views/info-pages.js';
 import * as shell from './views/shell.js';
 import * as account from './views/account.js';
+import * as staffInvite from './views/staff-invite.js';
 
 const modules = { constants, law, updates, legal, utils, data, state, plan, period, calc, exporter, reservations, grid,
-  adminShift, adminRequests, adminLeave, adminAnalysis, adminNotices, adminSettings, adminPlan, staff, infoPages, shell, account };
+  adminShift, adminRequests, adminLeave, adminAnalysis, adminNotices, adminSettings, adminPlan, staff, infoPages, shell, account, staffInvite };
 
 const seen = {};
 for (const [file, mod] of Object.entries(modules)) {
@@ -47,7 +48,17 @@ initState().then(() => {
   if (!Object.keys(S.grid).length) { gen(); msg = ''; }
   render();
   if (returning && isNewUpd()) whatsNew();
-  if (cloudEnabled) startAccount();
+  if (cloudEnabled) {
+    // 招待リンク（#invite=…）を開いたときは、参加の画面を出す
+    inviteToken = inviteTokenFromUrl();
+    if (inviteToken) { page = 'invite'; render(); }
+    // 開いているページのアドレスに、あとから招待リンクを貼ったとき（ページは読み込み直されない）
+    window.addEventListener('hashchange', () => {
+      const t = inviteTokenFromUrl();
+      if (t) { inviteToken = t; page = 'invite'; authMsg = ''; showLock = false; render(); }
+    });
+    startAccount();
+  }
 });
 
 // Supabase にまだ送っていない変更があるときは、ページを閉じる前に確かめる

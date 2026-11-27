@@ -26,7 +26,9 @@ export async function initState(){
   curStart:iso(new Date()),page:null,updSeen:getPref('seenVersion'),returning:hasSavedStore(),
   // 店長のアカウント（Supabase を使うときだけ）
   acct:{loading:cloudEnabled,user:null,consented:false,store:null},authStep:'login',authMsg:'',authBusy:false,captchaToken:null,authEmail:'',
-  storeLoadError:'',confirmLogout:false});
+  storeLoadError:'',confirmLogout:false,
+  // スタッフの参加（作業5）
+  inviteStatus:null,inviteToken:null,staffCtx:null});
  norm();
  if(!updSeen&&!returning)setPref('seenVersion',APP_VER);
 }

@@ -123,7 +123,7 @@ insert into public.shift_types (store_id, name, is_off) values (current_setting(
 insert into public.staff (store_id, name, role) values
   (current_setting('test.store_a')::uuid, '田中', '店長'), (current_setting('test.store_a')::uuid, '山田', 'パート'),
   (current_setting('test.store_a')::uuid, '伊藤', 'パート');
-insert into public.staff_private (staff_id, store_id, wage) select id, store_id, 1100 from public.staff;
+insert into public.staff_private (staff_id, store_id, wage) select id, store_id, case name when '山田' then 1180 else 1100 end from public.staff;
 insert into public.paid_leave_grants (store_id, staff_id, grant_date, days) select store_id, id, '2026-10-01', 10 from public.staff;
 insert into public.shift_assignments (store_id, staff_id, work_date, shift_type_id)
   select s.store_id, s.id, d::date, (select id from public.shift_types where name = '日勤')
@@ -134,6 +134,7 @@ select test.ok('店長は時給を読める', test.n('select * from public.staff
 select test.ok('店長は他店のスタッフを読めない', test.n($$select * from public.staff where store_id = current_setting('test.store_b')::uuid$$) = 0);
 select test.ok('店長は他店の時給を読めない', test.n($$select * from public.staff_private where store_id = current_setting('test.store_b')::uuid$$) = 0);
 select test.ok('店長は他店の実効プランを知れない', public.effective_plan(current_setting('test.store_b')::uuid) is null);
+select test.ok('店長自身はスタッフではないので、my_wage は null', public.my_wage(current_setting('test.store_a')::uuid) is null);
 
 \echo
 \echo '== 5. 招待リンク =='
@@ -171,6 +172,8 @@ select test.ok('スタッフは自分の有給付与だけ読める', test.n('se
 select test.ok('スタッフは他店の店舗・名簿を読めない', test.n('select * from public.stores') = 1 and test.n($$select * from public.staff where store_id = current_setting('test.store_b')::uuid$$) = 0);
 select test.ok('スタッフは自店の実効プランを知れる（機能の出し分け用）', public.effective_plan(current_setting('test.store_a')::uuid) = 'pro');
 select test.ok('スタッフは決済リンクを読めない', test.n('select * from public.app_config') = 0);
+select test.ok('スタッフは自分の時給だけを関数で知れる（給与見込用）', public.my_wage(current_setting('test.store_a')::uuid) = 1180);
+select test.ok('スタッフは他店の時給を関数で知れない', public.my_wage(current_setting('test.store_b')::uuid) is null);
 update public.shift_assignments set memo = 'x' where work_date = '2026-11-10';
 delete from public.shift_assignments where work_date = '2026-11-11';
 reset role;

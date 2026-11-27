@@ -24,6 +24,8 @@ export async function refreshAccount() {
   try { acct = { ...(await loadAccount()), loading: false }; }
   catch (e) { acct = { user: null, consented: false, store: null, loading: false, error: accountError(e) }; }
   if (acctReady() && !cloudStoreOpen()) await loadCloudStoreIntoApp();
+  // 招待リンクで参加した端末（匿名ログイン）なら、スタッフ画面にお店のデータを読み込む
+  if (acct.user && acct.user.is_anonymous && !staffMode() && !inviteToken) await loadStaffIntoApp();
   if (showLock && acctReady()) enterAdmin();
   render();
 }

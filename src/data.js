@@ -89,6 +89,8 @@ export function accountError(e) {
   if (/Password should be|weak_password/i.test(m) || code === 'weak_password') return 'パスワードが短すぎるか、簡単すぎます。8文字以上で、英字と数字をまぜてください。';
   if (/rate limit|too many/i.test(m) || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') return '短い時間に何度も送られました。しばらく待ってから、もう一度お試しください。';
   if (/consent_required/.test(m)) return '利用規約とプライバシーポリシーへの同意が必要です。';
+  if (/invalid_invite/.test(m)) return 'この招待リンクは使えません（使用済みか、期限切れです）。店長に再発行を頼んでください。';
+  if (/anonymous.*disabled/i.test(m) || code === 'anonymous_provider_disabled') return '招待リンクでの参加が、いまは止められています。店長に連絡してください。';
   if (/staff_limit_exceeded/.test(m)) return 'プランのスタッフ上限を超えています。';
   if (/Failed to fetch|NetworkError|network/i.test(m)) return 'インターネットにつながっていないようです。接続を確かめて、もう一度お試しください。';
   return 'うまくいきませんでした（' + m.slice(0, 120) + '）';
@@ -351,7 +353,7 @@ export async function openCloudStore(storeId) {
 
 /** お店を閉じる（ログアウトしたとき）。以後の save() はこの端末に保存する */
 export function closeCloudStore() { if (cloud) clearTimeout(cloud.timer); cloud = null; }
-export const cloudStoreOpen = () => !!cloud;
+export const cloudStoreOpen = () => !!cloud && !cloud.readOnly;
 export const cloudSaveState = () => (cloud ? cloud.state : 'local');
 
 function saveExtras(S) {
@@ -383,6 +385,7 @@ async function syncNow() {
 /** 店舗データ S を保存する。お店を Supabase で開いているときは Supabase に、そうでなければこの端末に */
 export function save() {
   if (!cloud) { saveStore(S); return; }
+  if (cloud.readOnly) return;            // スタッフの端末：保存しない
   saveExtras(S);
   cloud.state = 'pending';
   clearTimeout(cloud.timer);
@@ -390,4 +393,78 @@ export function save() {
 }
 
 /** 送っていない変更があるか（ページを閉じる前の確認に使う） */
-export const cloudUnsaved = () => !!cloud && ['pending', 'saving', 'error'].includes(cloud.state);
+export const cloudUnsaved = () => !!cloud && !cloud.readOnly && ['pending', 'saving', 'error'].includes(cloud.state);
+/** スタッフとして参加している端末か */
+export const staffMode = () => !!cloud && !!cloud.readOnly;
+
+/* ===================== スタッフの参加（作業5） =====================
+   店長が招待リンクを発行 → スタッフがリンクを開く → ロボット対策のあと匿名でログイン →
+   データベースの redeem_invite でトークンを確かめ、その端末をスタッフの名簿の1行に結びつける。
+   リンクのトークンは URL の「#」のあと（#invite=…）に置く。「#」のあとはサーバーに送られず、記録にも残らない。
+*/
+export const inviteUrl = token => location.origin + location.pathname + '#invite=' + token;
+export function inviteTokenFromUrl() { const m = location.hash.match(/^#invite=([0-9a-zA-Z]{20,128})$/); return m ? m[1] : null; }
+export function clearInviteFromUrl() { history.replaceState(null, '', location.pathname + location.search); }
+
+/** 招待リンクを発行する（前に発行した、まだ使われていないリンクは使えなくなる）。リンクの URL を返す */
+export async function createInvite(staffId) {
+  const { data, error } = await sb.rpc('create_invite', { p_staff: staffId });
+  if (error) throw error;
+  return inviteUrl(data);
+}
+
+/** 名簿のスタッフごとの参加の状態：joined（参加済み）／invited（リンクを発行済みで未使用）／none */
+export async function loadInviteStatus(storeId) {
+  const [st, inv] = await Promise.all([
+    sb.from('staff').select('id, user_id').eq('store_id', storeId),
+    sb.from('staff_invites').select('staff_id, expires_at, used_at').eq('store_id', storeId).is('used_at', null),
+  ]);
+  if (st.error) throw st.error;
+  if (inv.error) throw inv.error;
+  const now = new Date().toISOString(), out = {};
+  st.data.forEach(s => { out[s.id] = { state: s.user_id ? 'joined' : 'none' }; });
+  inv.data.forEach(i => { if (i.expires_at > now && out[i.staff_id] && out[i.staff_id].state !== 'joined') out[i.staff_id] = { state: 'invited', expires: i.expires_at }; });
+  return out;
+}
+
+/** スタッフの参加を解除する（その端末からは見られなくなる） */
+export async function unlinkStaff(storeId, staffId) {
+  const { error } = await sb.from('staff').update({ user_id: null }).eq('store_id', storeId).eq('id', staffId);
+  if (error) throw error;
+}
+
+/** 招待リンクで参加する。まだログインしていなければ、ロボット対策のトークンを使って匿名でログインする */
+export async function joinWithInvite(token, captchaToken) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && !session.user.is_anonymous) throw new Error('owner_session');
+  if (!session) {
+    const { error } = await sb.auth.signInAnonymously({ options: { captchaToken } });
+    if (error) throw error;
+  }
+  const { data, error } = await sb.rpc('redeem_invite', { p_token: token });
+  if (error) throw error;
+  return data;
+}
+
+/** スタッフとして参加している端末なら、そのお店のデータ（公開されたシフト・名簿・自分の時給）を読む。参加していなければ null */
+export async function openStaffStore() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session || !session.user.is_anonymous) return null;
+  const me = await sb.from('staff').select('id, store_id').eq('user_id', session.user.id).eq('active', true).maybeSingle();
+  if (me.error) throw me.error;
+  if (!me.data) return null;
+  const storeId = me.data.store_id, one = async q => { const { data, error } = await q; if (error) throw error; return data; };
+  const [store, shiftTypes, staff, cells, pubs, wage] = await Promise.all([
+    one(sb.from('stores').select('id, name, industry, company_size, request_deadline').eq('id', storeId).single()),
+    selectAll(() => sb.from('shift_types').select('*').eq('store_id', storeId).order('sort_order')),
+    selectAll(() => sb.from('staff').select('*').eq('store_id', storeId).eq('active', true).order('sort_order')),
+    selectAll(() => sb.from('shift_assignments').select('store_id, staff_id, work_date, shift_type_id, leave, wish_off, memo').eq('store_id', storeId).order('work_date')),
+    one(sb.from('shift_publications').select('start_date, end_date, published_at').eq('store_id', storeId).order('end_date', { ascending: false }).limit(1)),
+    one(sb.rpc('my_wage', { p_store: storeId })),
+  ]);
+  const base = migrate({ ...def(), grid: {}, wish: {}, memo: {}, notices: [], res: [] });
+  const S = rowsToStore({ store, settings: null, shiftTypes, staff, wages: wage == null ? [] : [{ staff_id: me.data.id, wage }], cells, pub: pubs[0] || null }, base);
+  // スタッフの端末では保存しない（読むだけ）。この端末の保存にもお店のデータを書かない
+  cloud = { storeId, readOnly: true, snap: null, timer: null, running: false, again: false, state: 'staff' };
+  return { S, staffId: me.data.id, storeName: store.name };
+}

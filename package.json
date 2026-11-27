@@ -11,11 +11,13 @@
     "build:local": "VITE_SUPABASE_URL= VITE_SUPABASE_PUBLISHABLE_KEY= vite build",
     "test:account": "node tests/account-flow.cjs",
     "test:schema": "bash tests/run-schema-test.sh",
-    "test:cloud": "node tests/cloud-store.cjs"
+    "test:cloud": "node tests/cloud-store.cjs",
+    "test:staff": "node tests/staff-join.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
-    "exceljs": "4.4.0"
+    "exceljs": "4.4.0",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "vite": "6.4.5"

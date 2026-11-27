@@ -304,6 +304,12 @@ language sql stable security definer set search_path = '' as $$
                  where store_id = p_store and p_date between start_date and end_date)
 $$;
 
+-- スタッフ本人の時給だけを返す（スタッフ画面の給与見込に使う。本人でなければ null）
+create function public.my_wage(p_store uuid) returns integer
+language sql stable security definer set search_path = '' as $$
+  select p.wage from public.staff_private p where p.staff_id = public.my_staff_id(p_store)
+$$;
+
 -- ---------------------------------------------------------------------
 -- 3. プラン
 -- ---------------------------------------------------------------------
@@ -689,7 +695,7 @@ revoke update, delete on public.consents from authenticated;
 
 grant execute on function
   public.is_anonymous_user(), public.is_platform_admin(), public.is_store_admin(uuid),
-  public.my_staff_id(uuid), public.is_store_user(uuid), public.is_published(uuid, date),
+  public.my_staff_id(uuid), public.is_store_user(uuid), public.is_published(uuid, date), public.my_wage(uuid),
   public.effective_plan(uuid), public.staff_limit(text),
   public.create_store(text, text, text),
   public.ops_set_plan(uuid, text, text, text, text, date, date, text, text, boolean),

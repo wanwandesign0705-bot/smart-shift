@@ -19,6 +19,7 @@ npm run build    # 公開用のファイルを dist/ に作る
 ```bash
 npm run test:account   # 店長の登録・ログイン・お店の作成の流れ（Supabase への通信はテストが受け取る）
 npm run test:cloud     # 管理画面のデータが Supabase に保存され、開き直しても残るか（作業4）
+npm run test:staff     # 招待リンクでスタッフが参加できるか（作業5）
 npm run test:schema    # schema.sql の守り（PostgreSQL 16 が必要）
 ```
 
@@ -35,6 +36,8 @@ npm run test:schema    # schema.sql の守り（PostgreSQL 16 が必要）
 | `src/state.js` | 店舗データのひな形と、画面どうしで共有する変数 |
 | `src/export.js` | Excel 出力 |
 | `src/views/account.js` | 店長のログイン・新規登録・規約への同意・お店の作成（作業3） |
+| `src/views/staff-invite.js` | 招待リンクの発行・参加・解除（作業5、`docs/staff-join.md`） |
+| `supabase/migrations/` | すでに作った Supabase に追加で流す SQL |
 | `src/views/` | 画面ごとのファイル（管理者の7タブ、スタッフ画面、シフト表、予約、アップデート情報と規約、ロック画面と全体の描画） |
 
 ### いまの書き方について
